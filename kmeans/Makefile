@@ -15,10 +15,10 @@ vpath %.cc sequential/src tests
 vpath %.cu parallel/src tests
 
 .cc.o: 
-	$(CC) -c $(CFLAGS) $@ $< $(INCLUDES) -Wall
+	$(CC) -c $(CFLAGS) $@ $< $(INCLUDES)
 
 .cu.o: 
-	$(CU) -c $(CFLAGS) $@ $< $(INCLUDES) -Wall
+	$(CU) -c $(CFLAGS) $@ $< $(INCLUDES)
 
 default_target: all
 all: kmeans_sequential
@@ -34,7 +34,7 @@ kmeans_sequential_sorting: main_sequential.o kmeans_sorting.o
 
 kmeans_parallel: main_parallel.o kmeans_parallel.o
 	$(CU) -g -G $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) -lcudart &&\
-		./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
+		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
 
 npy_test: npy_test.o
 	python3 tests/make_mnist_seq.py &&\

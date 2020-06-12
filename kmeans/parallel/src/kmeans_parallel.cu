@@ -5,63 +5,72 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     Announce announce(KSize, DataSize, FeatSize);
 
     cudaAssert (
-        cudaHostRegister(data, DataSize*FeatSize*sizeof(Data_T), cudaHostRegisterMapped)
+        cudaHostRegister(data, DataSize*sizeof(DataPoint), cudaHostRegisterPortable)
     );
     cudaAssert (
-        cudaHostRegister(centroids, KSize*FeatSize*sizeof(Data_T), cudaHostRegisterMapped)
+        cudaHostRegister(centroids, KSize*sizeof(DataPoint), cudaHostRegisterPortable)
+    );
+
+    auto newCentroids = new DataPoint[KSize];
+    cudaAssert (
+        cudaHostRegister(newCentroids, KSize*sizeof(DataPoint), cudaHostRegisterPortable)
+    );
+
+    bool* isSame = new bool;
+    *isSame = true;
+    cudaAssert (
+        cudaHostRegister(isSame, sizeof(bool), cudaHostRegisterPortable)
     );
 
     //study(deviceQuery());
-
-    int numThread_labeling = 64; /*TODO get from study*/
+    int numThread_labeling = 128; /*TODO get from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
-    auto newCentroids = new DataPoint[KSize];
-    int threashold = 47; // 
-    while(true && threashold-- > 0) {
+    int threashold = 30; // 
+    while(threashold-- > 0) {
         KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(centroids, data);
-        cudaDeviceSynchronize();
-        //cudaAssert(cudaPeekAtLastError());
+        //cudaDeviceSynchronize();
+        cudaAssert( cudaPeekAtLastError());
 
-        announce.Labels(data);
+        resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
+        //cudaDeviceSynchronize();
+        //for(int i=0; i!=KSize; ++i) {
+        //    for(int j=0; j!=FeatSize; ++j) {
+        //        assert(newCentroids[i].value[j] == 0);
+        //    }
+        //}
 
-        resetNewCentroids(newCentroids);
-        KMeans::updateCentroid(newCentroids, data);
+        //Sequential::updateCentroid(newCentroids, data);
+        KMeans::updateCentroidAccum<<<numBlock_labeling,numThread_labeling>>>(newCentroids, data);
+        KMeans::updateCentroidDivide<<<KSize, FeatSize>>>(newCentroids);
+        //cudaDeviceSynchronize();
 
-        if(KMeans::isSame(centroids, newCentroids))
-            break;
+        KMeans::checkIsSame<<<KSize, FeatSize>>>(isSame, centroids, newCentroids);
+        //cudaDeviceSynchronize();
+        //if(isSame)
+            //break;
 
-        cudaMemcpy (
-            (void*)centroids,
-            (void*)newCentroids,
-            KSize*sizeof(DataPoint),
-            cudaMemcpyHostToDevice
-        );
+        memcpyCentroid<<<KSize,FeatSize>>>(centroids, newCentroids);
+        //cudaDeviceSynchronize();
+        //for(int i=0; i!=KSize; ++i) {
+        //    for(int j=0; j!=FeatSize; ++j) {
+        //        assert(newCentroids[i].value[j] == centroids[i].value[j]);
+        //    }
+        //}
     }
+    cudaDeviceSynchronize();
+    cudaAssert( cudaPeekAtLastError());
+    announce.Labels(data);
 
+    cudaAssert( cudaHostUnregister(data) );
+    cudaAssert( cudaHostUnregister(centroids) );
+    cudaAssert( cudaHostUnregister(newCentroids) );
+    cudaAssert( cudaHostUnregister(isSame) );
 
+    delete[] data;
+    delete[] centroids;
     delete[] newCentroids;
-    cudaFreeHost(data);
-    cudaFreeHost(centroids);
-}
-
-
-void resetNewCentroids(DataPoint* newCentroids) {
-    for(int i=0; i!=KSize; ++i) {
-        newCentroids[i].label = i;
-        Data_T* valuePtr = newCentroids[i].value;
-        
-        for(int j=0; j!=FeatSize; ++j) {
-            *valuePtr = 0.0;
-            valuePtr++;
-        }
-    }
-
-    for(int i=0; i!=KSize; ++i) {
-        for(int j=0; j!=FeatSize; ++j) {
-            assert(newCentroids[i].value[j] == 0);
-        }
-    }
+    delete isSame;
 }
 
 /// initCentroids /////////////////////////////////////////////////////////////////////////////
@@ -80,16 +89,13 @@ void KMeans::initCentroids(DataPoint* const centroids, const DataPoint* const da
 __global__
 void KMeans::labeling(const DataPoint* const centroids, DataPoint* const data) {
     const int& idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if(idx >= 59900) {
-        printf("%d\n",idx);
-    }
     if(idx >= DataSize)
         return;
     Labeling::setClosestCentroid(centroids, data+idx);
 }
 
 __device__
-void KMeans::Labeling::setClosestCentroid( const DataPoint* centroids, DataPoint* const data) {
+void KMeans::Labeling::setClosestCentroid(const DataPoint* centroids, DataPoint* const data) {
     const DataPoint* centroidPtr = centroids;
     size_t minDistLabel = 0;
     Data_T minDistSQR = MaxDataValue;
@@ -128,59 +134,51 @@ Data_T KMeans::Labeling::euclideanDistSQR ( const DataPoint* const lhs, const Da
 }
 
 /// update centroids //////////////////////////////////////////////////////////////////////////////
+__global__
+void KMeans::updateCentroidAccum(DataPoint* const centroids, const DataPoint* const data) {
+    const int dataIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(dataIdx >= DataSize)
+        return;
 
-void KMeans::updateCentroid(DataPoint* const centroids, const DataPoint* const data) {
-    int labelSizes[KSize] = {0,}; 
-    
-    // 모든 데이터 포인트의 값을 해당하는 centroid에 더한다.
-    const DataPoint* dataPtr = data;
-    for(int dataIdx=0; dataIdx!=DataSize; ++dataIdx) {
-        Update::addValuesLtoR(dataPtr->value, centroids[dataPtr->label].value);
+    const int centroidIdx = data[dataIdx].label;
 
-        labelSizes[dataPtr->label]++;
-        dataPtr++;
-    }
-
-    DataPoint* centroidPtr = centroids;
-    for(int kIdx=0; kIdx!=KSize; ++kIdx) {
-        int label = centroidPtr->label;
-        Data_T* valuePtr = centroidPtr->value;
-
-        for(int featIdx=0; featIdx!=FeatSize; ++featIdx) {
-            *(valuePtr++) /= labelSizes[label];
-        }
-        centroidPtr++;
-    }
+    atomicAdd(&(centroids[centroidIdx].label), 1); // newCentroids는 labelSize를 나타내기 위해 0으로 초기화됨
+    Update::addValuesLtoR(data[dataIdx].value, centroids[centroidIdx].value);
 }
 
+__global__
+void KMeans::updateCentroidDivide(DataPoint* const centroids) {
+    centroids[blockIdx.x].value[threadIdx.x] /= centroids[blockIdx.x].label;
+}
+
+__device__
 void KMeans::Update::addValuesLtoR(const Data_T* const lhs, Data_T* const rhs) {
     const Data_T* lhsPtr = lhs;
     Data_T* rhsPtr = rhs;
 
     for(int featIdx=0; featIdx!=FeatSize; ++featIdx)
-        *(rhsPtr++) += *(lhsPtr++);
+        atomicAdd(rhsPtr++, *(lhsPtr++));
 }
 
-bool KMeans::isSame(DataPoint* const centroids, DataPoint* const newCentroids) {
-    DataPoint* prevCentroidPtr = centroids;
-    DataPoint* newCentroidPtr = newCentroids;
+__global__
+void KMeans::checkIsSame(bool* const isSame, DataPoint* const centroids, DataPoint* const newCentroids) {
+    Data_T prevValue = centroids[blockIdx.x].value[threadIdx.x];
+    Data_T newValue = newCentroids[blockIdx.x].value[threadIdx.x];
 
-    for(int kIdx=0; kIdx!=KSize; ++kIdx) {
-        Data_T* prevValuePtr = prevCentroidPtr->value;
-        Data_T* newValuePtr = newCentroidPtr->value;
-
-        for(int featIdx=0; featIdx!=FeatSize; ++featIdx) {
-            if(*prevValuePtr != *newValuePtr)
-                return false;
-
-            prevValuePtr++;
-            newValuePtr++;
-        }
-
-        prevCentroidPtr++;
-        newCentroidPtr++;
+    if(prevValue != newValue) {
+        *isSame = false;
     }
-    return true;
+}
+
+__global__
+void resetNewCentroids(DataPoint* newCentroids) {
+    newCentroids[blockIdx.x].label = 0;
+    newCentroids[blockIdx.x].value[threadIdx.x]= 0;
+}
+
+__global__
+void memcpyCentroid(DataPoint* const centroids, DataPoint* const newCentroids) {
+    centroids[blockIdx.x].value[threadIdx.x]= newCentroids[blockIdx.x].value[threadIdx.x];
 }
 
 void study(const std::vector<DeviceQuery>& devices) {
@@ -228,4 +226,36 @@ void study(const std::vector<DeviceQuery>& devices) {
         std::cout << device.threadsPerBlock << std::endl;
         std::cout << device.threadsPerMultiprocesser << std::endl;
     }
+}
+
+void Sequential::updateCentroid(DataPoint* const centroids, const DataPoint* const data) {
+    int labelSizes[KSize] = {0,}; 
+    
+    // 모든 데이터 포인트의 값을 해당하는 centroid에 더한다.
+    const DataPoint* dataPtr = data;
+    for(int dataIdx=0; dataIdx!=DataSize; ++dataIdx) {
+        labelSizes[dataPtr->label]++;
+
+        Update::addValuesLtoR(dataPtr->value, centroids[dataPtr->label].value);
+        dataPtr++;
+    }
+
+    DataPoint* centroidPtr = centroids;
+    for(int kIdx=0; kIdx!=KSize; ++kIdx) {
+        int labelSize = labelSizes[centroidPtr->label];
+        Data_T* valuePtr = centroidPtr->value;
+
+        for(int featIdx=0; featIdx!=FeatSize; ++featIdx) {
+            *(valuePtr++) /= labelSize;
+        }
+        centroidPtr++;
+    }
+}
+
+void Sequential::Update::addValuesLtoR(const Data_T* const lhs, Data_T* const rhs) {
+    const Data_T* lhsPtr = lhs;
+    Data_T* rhsPtr = rhs;
+
+    for(int featIdx=0; featIdx!=FeatSize; ++featIdx)
+        *(rhsPtr++) += *(lhsPtr++);
 }
