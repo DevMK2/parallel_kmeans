@@ -1,2 +1,6 @@
 results/*.csv
 tests/mnist_seq.txt
+kmeans_sequential
+kmeans_sequential_sorting
+kmeans_parallel
+kmeans_parallel_sorting
