@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-all: create_autoencoder_env autoencoder 
+all: create_autoencoder_env autoencoder clean-venv
 
 create_autoencoder_env:
 	python3 -m venv keras-env &&\
@@ -17,9 +17,12 @@ create_autoencoder_env:
 		pip install --upgrade keras
 
 autoencoder:
-	mkdir mnist_encoded &&\
+	mkdir -p mnist_encoded &&\
 	source keras-env/bin/activate &&\
 	python3 encoder/autoencoder.py
+
+clean-venv:
+	rm -rf keras-env
 
 clean:
 	rm -rf keras-env &&\
