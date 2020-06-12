@@ -1,0 +1,3 @@
+lib/*
+results/*.csv
+tests/mnist_seq.txt

@@ -1,0 +1,3 @@
+*.o
+temp/*
+devel/visual_evn

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+cd 
+python3 -m venv `dirname "$0"`/../devel/visual_env
+. "`dirname "$0"`/../devel/visual_env/bin/activate"
+echo "`dirname "$0"`/../devel/visual_env/bin/activate"
+python3 `dirname "$0"`/../src/view.py

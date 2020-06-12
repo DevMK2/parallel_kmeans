@@ -1,0 +1,3 @@
+encoder/__pycache__
+mnist_encoded/*.npy
+keras-env
