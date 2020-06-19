@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 
-cd 
-python3 -m venv `dirname "$0"`/../devel/visual_env
-. "`dirname "$0"`/../devel/visual_env/bin/activate"
-echo "`dirname "$0"`/../devel/visual_env/bin/activate"
-python3 `dirname "$0"`/../src/view.py
+VIS_ENV="`dirname "$0"`/../devel/visual_env"
+
+if [ ! -e $VIS_ENV ]; then
+  CWD=$(pwd)
+  cd `dirname "$0"`/..
+  make install
+  cd $CWD
+fi
+
+. "$VIS_ENV/bin/activate"
+
+python3 `dirname "$0"`/../src/visualize.py

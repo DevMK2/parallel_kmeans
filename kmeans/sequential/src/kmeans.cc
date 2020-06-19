@@ -1,25 +1,48 @@
+//#define SPARSE_LOG
+#define DEEP_LOG
+//#include "announce.hh"
 #include "kmeans.hh"
-#include "announce.hh"
+#include "log.cc"
 
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
-    Announce announce(KSize, DataSize, FeatSize);
+#ifdef SPARSE_LOG
+    Log<> log("./results/sequential");
+#else 
+#ifdef DEEP_LOG
+    Log<LoopEvaluate, 1024> log("./results/sequential_deep");
+#endif
+#endif
+    //Announce announce(KSize, DataSize, FeatSize);
 
     auto newCentroids = new DataPoint[KSize];
 
     while(true) {
         KMeans::labeling(centroids, data);
-        announce.Labels(data);
+        //announce.Labels(data);
+#ifdef DEEP_LOG
+        log.Lap("labeling");
+#endif 
 
         resetNewCentroids(newCentroids);
         KMeans::updateCentroid(newCentroids, data);
+#ifdef DEEP_LOG
+        log.Lap("updateCentroid");
+#endif 
 
         if(KMeans::isSame(centroids, newCentroids))
             break;
 
         memcpyCentroid(centroids, newCentroids);
+#ifdef DEEP_LOG
+        log.Lap("memcpyCentroid");
+#endif 
     }
 
     delete[] newCentroids;
+
+#ifdef SPARSE_LOG
+    log.Lap("KMeans-Sequential End");
+#endif
 }
 
 /// labeling ////////////////////////////////////////////////////////////////////////////////////

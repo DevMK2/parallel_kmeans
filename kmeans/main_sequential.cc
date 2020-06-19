@@ -5,7 +5,6 @@
 #include "npy.hh"
 #include "datatype.hh"
 #include "announce.hh"
-#include "log.cc"
 #include <stdlib.h>
 #include <string.h>
 
@@ -38,11 +37,7 @@ int main(int argc, const char *argv[]) {
     KMeans::initCentroids(centroids, data);
     announce.InitCentroids(centroids);
 
-    {
-    Log<> log("./log");
     KMeans::main(centroids, data);
-    log.Lap("KMeans End");
-    }
 
     delete[] data;
     delete[] centroids;

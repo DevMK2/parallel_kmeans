@@ -29,21 +29,11 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     int threashold = 30; // 
     while(threashold-- > 0) {
         KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(centroids, data);
-        //cudaDeviceSynchronize();
-        cudaAssert( cudaPeekAtLastError());
 
         resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
-        //cudaDeviceSynchronize();
-        //for(int i=0; i!=KSize; ++i) {
-        //    for(int j=0; j!=FeatSize; ++j) {
-        //        assert(newCentroids[i].value[j] == 0);
-        //    }
-        //}
 
-        //Sequential::updateCentroid(newCentroids, data);
         KMeans::updateCentroidAccum<<<numBlock_labeling,numThread_labeling>>>(newCentroids, data);
         KMeans::updateCentroidDivide<<<KSize, FeatSize>>>(newCentroids);
-        //cudaDeviceSynchronize();
 
         KMeans::checkIsSame<<<KSize, FeatSize>>>(isSame, centroids, newCentroids);
         //cudaDeviceSynchronize();
@@ -51,12 +41,6 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
             //break;
 
         memcpyCentroid<<<KSize,FeatSize>>>(centroids, newCentroids);
-        //cudaDeviceSynchronize();
-        //for(int i=0; i!=KSize; ++i) {
-        //    for(int j=0; j!=FeatSize; ++j) {
-        //        assert(newCentroids[i].value[j] == centroids[i].value[j]);
-        //    }
-        //}
     }
     cudaDeviceSynchronize();
     cudaAssert( cudaPeekAtLastError());

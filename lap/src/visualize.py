@@ -1,3 +1,4 @@
+#-*- coding:utf-8 -*-
 import os
 import sys
 
@@ -6,6 +7,8 @@ import matplotlib.pyplot as plt
 from copy import deepcopy as dcopy
 from enum import Enum
 
+RESULT_PATH = "___visualize_results___"
+ALERT = "visualize results directory has already been, it can overwrite previous results.\n Do you want to continue?(!y|n)"
 
 class LogType(Enum):
     Warterfall = 1
@@ -54,9 +57,14 @@ def addLabel(plot, logType=LogType.Warterfall):
     plot.ylabel('Elapsed time(ms)');
 
 
+def saveCurrFig(fileName):
+    plt.savefig(os.path.join(RESULT_PATH, fileName));
+
+
 def drawData(title, data, logType=LogType.Warterfall, kind='bar'):
     data.plot(kind=kind, rot=0, title=title)
     addLabel(plt, logType);
+    saveCurrFig(title.replace('.csv','')+'.png')
 
 
 def filePostfix(path):
@@ -88,9 +96,12 @@ def drawDir(dirPath):
 
 
 if __name__ == '__main__':
-    #inputFile = "../temp/LoopResultFileFormatCorrect.csv"
-    #inputFile = "../temp/ResultFileFormatCorrect.csv"
-    relativeFilePath = input("파일의 상대좌표 혹은 csv파일들이 있는 디렉토리 입력:")
+    if not os.path.isdir(RESULT_PATH):
+        os.mkdir(RESULT_PATH)
+    elif input(ALERT) in ('n','N'):
+        exit(0)
+
+    relativeFilePath = input("\n Plz type relative path of csv file or dir path :")
 
     if os.path.isfile(relativeFilePath):
         drawFile(relativeFilePath)
@@ -101,19 +112,4 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     plt.show();
-
-    ##first = data.loc[:,['first']]
-    ##first.plot(kind='bar');
-
-    ##last = data.loc[:,['last']]
-    ##last.plot(kind='bar');
-
-    ##avg = data.loc[:,['average']]
-    ##avg.plot(kind='bar');
-
-    ##max = data.loc[:,['max']]
-    ##max.plot(kind='bar');
-
-    ##min = data.loc[:,['min']]
-    ##min.plot(kind='bar');
-
+    print(relativeFilePath)

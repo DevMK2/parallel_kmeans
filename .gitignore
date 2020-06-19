@@ -1,3 +1,6 @@
 cnpy
 **/*.o
 **/*.csv
+
+#temp!!
+kmeans/results/___visualize_results___

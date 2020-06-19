@@ -20,8 +20,7 @@ vpath %.cu parallel/src tests
 .cu.o: 
 	$(CU) -c $(CFLAGS) $@ $< $(INCLUDES)
 
-default_target: all
-all: kmeans_sequential
+default_target: kmeans_sequential
 npy_test_clean: npy_test clean
 
 kmeans_sequential: main_sequential.o kmeans.o
