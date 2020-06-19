@@ -2,6 +2,7 @@
 #define __KMEANS_PARALLEL_HH__
 
 #include "datatype.hh"
+#include "datatype_const.cuh"
 #include <cuda.h>
 #include "cuda_assert.cuh"
 #include "cuda_device.cuh"

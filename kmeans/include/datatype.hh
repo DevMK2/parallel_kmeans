@@ -3,6 +3,7 @@
 #include "npy.hh" // npy size_t
 #include <vector>
 
+using Label_T = int;
 using Data_T = float;
 using Data_V = std::vector<Data_T>;
 
@@ -13,7 +14,7 @@ static const size_t DataSize = 60000;
 static const size_t FeatSize = 200;
 
 struct DataPoint {
-    int label = 0;
+    Label_T label = 0;
     Data_T value[FeatSize];
 };
 

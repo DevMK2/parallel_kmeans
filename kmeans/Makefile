@@ -35,6 +35,10 @@ kmeans_parallel: main_parallel.o kmeans_parallel.o
 	$(CU) -g -G $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) -lcudart &&\
 		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
 
+kmeans_parallel_const: main_parallel.o kmeans_parallel_const.o
+	$(CU) -g -G $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) -lcudart &&\
+		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
+
 npy_test: npy_test.o
 	python3 tests/make_mnist_seq.py &&\
 	mkdir -p temp &&\

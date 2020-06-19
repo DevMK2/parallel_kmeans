@@ -1,6 +1,20 @@
 #include "kmeans_parallel.cuh"
 #include "announce.hh"
 
+void memcpyCentroidsToConst(DataPoint* centroids);
+void memcpyCentroidsFromConst(DataPoint* centroids);
+
+namespace KMeans {
+__global__ void labeling(DataPoint* const data);
+    namespace Labeling {
+    __device__
+    Data_T euclideanDistSQR ( const Data_T* const __restrict__ lhs, const DataPoint* const __restrict__ rhs);
+    }
+};
+
+__device__ __constant__ Label_T constCentroidLabels[KSize];
+__device__ __constant__ Data_T constCentroidValues[KSize*FeatSize];
+
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     Announce announce(KSize, DataSize, FeatSize);
 
@@ -26,9 +40,11 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     int numThread_labeling = 128; /*TODO get from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
-    int threashold = 5; // 
+    int threashold = 3; // 
     while(threashold-- > 0) {
-        KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(centroids, data);
+        cudaDeviceSynchronize();
+        memcpyCentroidsToConst(centroids);
+        KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(data);
 
         resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
 
@@ -71,36 +87,30 @@ void KMeans::initCentroids(DataPoint* const centroids, const DataPoint* const da
 
 /// labeling ////////////////////////////////////////////////////////////////////////////////////
 __global__
-void KMeans::labeling(const DataPoint* const centroids, DataPoint* const data) {
+void KMeans::labeling(DataPoint* const data) {
     const int& idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= DataSize)
         return;
-    Labeling::setClosestCentroid(centroids, data+idx);
-}
+    DataPoint currData = data[idx].value;
 
-__device__
-void KMeans::Labeling::setClosestCentroid(const DataPoint* centroids, DataPoint* const data) {
-    const DataPoint* centroidPtr = centroids;
-    size_t minDistLabel = 0;
+    Label_T minDistLabel = 0;
     Data_T minDistSQR = MaxDataValue;
 
-    for(int kIdx=0; kIdx!=KSize; ++kIdx) {
-        Data_T currDistSQR = euclideanDistSQR(centroidPtr, data);
+    for(int i=0; i!=KSize; ++i) {
+        Data_T currDistSQR = KMeans::Labeling::euclideanDistSQR(&constCentroidValues[i*FeatSize], &currData);
 
         if(minDistSQR > currDistSQR) {
-            minDistLabel = centroidPtr->label;
+            minDistLabel = constCentroidLabels[i];
             minDistSQR = currDistSQR;
         }
-
-        centroidPtr++;
     }
 
-    data->label = minDistLabel;
+    data[idx].label = minDistLabel;
 }
 
-__device__
-Data_T KMeans::Labeling::euclideanDistSQR ( const DataPoint* const lhs, const DataPoint* const rhs) {
-    const Data_T* valuePtrLHS = lhs->value;
+__device__ 
+Data_T KMeans::Labeling::euclideanDistSQR ( const Data_T* const __restrict__ lhs, const DataPoint* const __restrict__ rhs) { 
+    const Data_T* valuePtrLHS = lhs;
     const Data_T* valuePtrRHS = rhs->value;
 
     Data_T distSQR = 0;
@@ -116,6 +126,9 @@ Data_T KMeans::Labeling::euclideanDistSQR ( const DataPoint* const lhs, const Da
 
     return distSQR;
 }
+
+__device__ void KMeans::Labeling::setClosestCentroid(const DataPoint* __restrict__ centroids, DataPoint* const data) { }
+__device__ Data_T KMeans::Labeling::euclideanDistSQR ( const DataPoint* const __restrict__ lhs, const DataPoint* const __restrict__ rhs) { return Data_T(0); }
 
 /// update centroids //////////////////////////////////////////////////////////////////////////////
 __global__
@@ -242,4 +255,43 @@ void Sequential::Update::addValuesLtoR(const Data_T* const lhs, Data_T* const rh
 
     for(int featIdx=0; featIdx!=FeatSize; ++featIdx)
         *(rhsPtr++) += *(lhsPtr++);
+}
+
+void memcpyCentroidsFromConst(DataPoint* centroids) {
+    Label_T labels[KSize];
+    Data_T values[KSize*FeatSize];
+
+    cudaAssert (
+        cudaMemcpyFromSymbol(labels, constCentroidLabels, sizeof(Label_T))
+    );
+    cudaAssert (
+        cudaMemcpyFromSymbol(values, constCentroidValues, KSize*FeatSize*sizeof(Data_T))
+    );
+
+    for(int i=0; i!=KSize; ++i) {
+        centroids[i].label = labels[i];
+
+        for(int j=0; j!=FeatSize; ++j) {
+            centroids[i].value[j] = values[i*FeatSize+j];
+        }
+    }
+}
+
+void memcpyCentroidsToConst(DataPoint* centroids) {
+    Label_T labels[KSize];
+    Data_T values[KSize*FeatSize];
+    
+    for(int i=0; i!=KSize; ++i) {
+        labels[i] = centroids[i].label;
+
+        for(int j=0; j!=FeatSize; ++j) {
+            values[i*FeatSize+j] = centroids[i].value[j];
+        }
+    }
+    cudaAssert (
+        cudaMemcpyToSymbol(constCentroidLabels, labels, KSize*sizeof(Label_T))
+    );
+    cudaAssert (
+        cudaMemcpyToSymbol(constCentroidValues, values, KSize*FeatSize*sizeof(Data_T))
+    );
 }
