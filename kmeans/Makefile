@@ -44,7 +44,5 @@ npy_test: npy_test.o
 
 clean:
 	rm -rf *.o &&\
-		rm -rf *.csv &&\
-		rm -rf kmeans_sequential &&\
-		rm -rf kmeans_sequential_sorting &&\
-		rm -rf kmeans_parallel
+		rm -rf *.csv
+		#rm -rf kmeans_sequential &&\ rm -rf kmeans_sequential_sorting &&\ rm -rf kmeans_parallel
