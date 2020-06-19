@@ -1,0 +1,17 @@
+#!/bin/bash
+
+EXP_NAME='log'
+
+if [ $# -eq 3 ]; then
+    echo $2
+    EXP_NAME=$2
+fi
+
+if [ $1 == "-h" ]; then
+    echo '============='
+    echo 'Usage'
+    echo './ncu_export {excutable_cuda_application} {logfile_name : optional}'
+    echo '============='
+else
+    #nv-nsight-cu-cli --export $2 $1 ../../mnist/mnist_encoded/encoded_train_ae.npy
+fi

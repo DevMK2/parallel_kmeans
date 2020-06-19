@@ -1,0 +1,11 @@
+#!/bin/bash
+
+if [ $1 == "-h" ]; then
+    echo '============='
+    echo 'Usage'
+    echo './ncu_import {logfile_name}'
+    echo '============='
+else
+    nv-nsight-cu-cli --import $1 >> $1'.txt'
+    cat $1'.txt'
+fi
