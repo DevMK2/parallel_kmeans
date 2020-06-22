@@ -4,3 +4,5 @@ cnpy
 
 #temp!!
 kmeans/results/___visualize_results___
+kmeans/utils/*-report
+kmeans/utils/*.txt
