@@ -1,9 +1,10 @@
 #ifndef __KMENAS_ARGV_PARSE_HH__
 #define __KMENAS_ARGV_PARSE_HH__
 
+#include <cassert>
+#include <fstream>
 #include <stdlib.h>
 #include <string.h>
-#include <fstream>
 #include "npy.hh"
 #include "datatype.hh"
 #include "announce.hh"

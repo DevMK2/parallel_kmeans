@@ -1,8 +1,19 @@
-/***********************************************************/
-/* This code came from NVIDIA-CUDA_Samples of device query */
-/* This code came from NVIDIA-CUDA_Samples of device query */
-/* This code came from NVIDIA-CUDA_Samples of device query */
-/***********************************************************/
+/***********************************************/
+/*                                             */
+/*        DO  NOT  EDIT  THIS  FILE            */
+/*        DO  NOT  EDIT  THIS  FILE            */
+/*        DO  NOT  EDIT  THIS  FILE            */
+/*        DO  NOT  EDIT  THIS  FILE            */
+/*        DO  NOT  EDIT  THIS  FILE            */
+/*                                             */
+/***********************************************/
+/*************************************************************/
+/*                                                           */
+/*                                                           */
+/* This code came from NVIDIA-CUDA_Samples of 'device_query' */
+/*                                                           */
+/*                                                           */
+/*************************************************************/
 
 #ifndef __CUDA_SMCORES_HH__
 #define __CUDA_SMCORES_HH__

@@ -1,12 +1,12 @@
 #ifndef __NPY_HH__
 #define __NPY_HH__
 
-#include "cnpy.h"
 #include <complex>
 #include <cstdlib>
 #include <iostream>
-#include <map>
 #include <string>
+#include <map>
+#include "cnpy.h"
 
 using Path_T = std::string;
 using Name_T = std::string;
