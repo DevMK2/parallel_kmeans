@@ -20,7 +20,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     );
 
     //study(deviceQuery());
-    int numThread_labeling = 128; /*TODO get from study*/
+    int numThread_labeling = 4; /*TODO get from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
     int threashold = 3; // 
@@ -57,7 +57,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 /// labeling ////////////////////////////////////////////////////////////////////////////////////
 __global__
 void KMeans::labeling(const DataPoint* const centroids, DataPoint* const data) {
-    const int& idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= DataSize)
         return;
 

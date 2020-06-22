@@ -33,12 +33,14 @@ kmeans_sequential_sorting: main.o kmeans_sorting.o
 kmeans_parallel: main.o kmeans_parallel.o
 	cp main.cc main.cu &&\
 	$(CU) -g -G $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) -lcudart -DPARALLEL&&\
-		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
+		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
+		rm -rf main.cu
 
 kmeans_parallel_const: main.o kmeans_parallel_const.o
 	cp main.cc main.cu &&\
 	$(CU) -g -G $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) -lcudart -DPARALLEL&&\
-		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
+		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
+		rm -rf main.cu
 
 npy_test: npy_test.o
 	python3 tests/make_mnist_seq.py &&\
