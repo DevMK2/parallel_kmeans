@@ -1,6 +1,10 @@
 #!/bin/bash
 
-EXP_NAME='log'
+KM_UTILS=$(builtin cd "`dirname "${BASH_SOURCE[0]}"`" > /dev/null && pwd)
+
+RESULTS_PATH=${KM_UTILS}/../results
+MNIST_PATH=${KM_UTILS}/../../mnist/mnist_encoded
+MNIST_FILE='encoded_train_ae.npy'
 
 if [ $# -lt 2 ]; then
     echo '============='
@@ -8,10 +12,16 @@ if [ $# -lt 2 ]; then
     echo './ncu_export {excutable_cuda_application} {logfile_name} {kernel_name : optional}'
     echo '============='
 else
+    EXEC_FILE=$1
     EXP_NAME=$2
+
     if [ $# -eq 3 ]; then
-	nv-nsight-cu-cli --export ${EXP_NAME} $1 ../../mnist/mnist_encoded/encoded_train_ae.npy
+        nv-nsight-cu-cli --export ${RESULTS_PATH}/${EXP_NAME} ${EXEC_FILE} ${MNIST_PATH}/${MNIST_FILE}
     else
-	nv-nsight-cu-cli --kernel-id ::$3: --export ${EXP_NAME} $1 ../../mnist/mnist_encoded/encoded_train_ae.npy
+        nv-nsight-cu-cli --kernel-id ::$3: --export ${RESULTS_PATH}/${EXP_NAME} ${EXEC_FILE} ${MNIST_PATH}/${MNIST_FILE}
     fi
+
+    echo ''
+    echo 'Compelete!! results file is in =>> {ROOT}/kmeans/results/'
+    echo ''
 fi

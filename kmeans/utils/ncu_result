@@ -1,10 +1,24 @@
 #!/bin/bash
 
-if [ $1 == "-h" ]; then
-    echo '============='
-    echo 'Usage'
-    echo './ncu_import {logfile_name}'
-    echo '============='
+function echoHelp()
+{
+    echo "============="
+    echo "Usage"
+    echo "./ncu_import {'-f' : optional for full-explain} {logfile_name}"
+    echo "============="
+    exit
+}
+
+if [ $# -lt 1 ]; then
+    echoHelp
+fi
+
+if [ $1 == "-f" ]; then
+    if [ $# -lt 2 ]; then
+        echoHelp
+    fi
+    nv-nsight-cu-cli --details-all --import $2 >> $2'.txt'
+    cat $2'.txt'
 else
     nv-nsight-cu-cli --import $1 >> $1'.txt'
     cat $1'.txt'
