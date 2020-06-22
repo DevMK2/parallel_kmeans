@@ -1,6 +1,6 @@
 //#define SPARSE_LOG
 #define DEEP_LOG
-//#include "announce.hh"
+#include "announce.hh"
 #include "kmeans.hh"
 #include "log.cc"
 
@@ -12,13 +12,11 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     Log<LoopEvaluate, 1024> log("./results/sequential_deep");
 #endif
 #endif
-    //Announce announce(KSize, DataSize, FeatSize);
-
     auto newCentroids = new DataPoint[KSize];
 
     while(true) {
         KMeans::labeling(centroids, data);
-        //announce.Labels(data);
+        announce.Labels(data);
 #ifdef DEEP_LOG
         log.Lap("labeling");
 #endif 

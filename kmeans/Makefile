@@ -3,8 +3,6 @@ SHELL = /bin/bash
 CC = g++
 CU = nvcc
 CFLAGS = --std=c++14 -o
-#TODO lap build 추가
-#TODO lap path 수정
 INCLUDES = -Iinclude -I./sequential/include -I./parallel/include -I../lap/src
 LIBDIR = -Llib -L../lap/devel/lib
 #TODO libcudart 받아오기
@@ -21,22 +19,25 @@ vpath %.cu parallel/src tests
 	$(CU) -c $(CFLAGS) $@ $< $(INCLUDES)
 
 default_target: kmeans_sequential
+#all: kmeans_sequential kmeans_sequential_sorting kmeans_parallel kmeans_parallel_const
 npy_test_clean: npy_test clean
 
-kmeans_sequential: main_sequential.o kmeans.o
+kmeans_sequential: main.o kmeans.o
 	$(CC) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) &&\
 		./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
 
-kmeans_sequential_sorting: main_sequential.o kmeans_sorting.o
+kmeans_sequential_sorting: main.o kmeans_sorting.o
 	$(CC) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) &&\
 		./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
 
-kmeans_parallel: main_parallel.o kmeans_parallel.o
-	$(CU) -g -G $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) -lcudart &&\
+kmeans_parallel: main.o kmeans_parallel.o
+	cp main.cc main.cu &&\
+	$(CU) -g -G $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) -lcudart -DPARALLEL&&\
 		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
 
-kmeans_parallel_const: main_parallel.o kmeans_parallel_const.o
-	$(CU) -g -G $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) -lcudart &&\
+kmeans_parallel_const: main.o kmeans_parallel_const.o
+	cp main.cc main.cu &&\
+	$(CU) -g -G $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) -lcudart -DPARALLEL&&\
 		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
 
 npy_test: npy_test.o
@@ -48,5 +49,9 @@ npy_test: npy_test.o
 
 clean:
 	rm -rf *.o &&\
-		rm -rf *.csv
-		#rm -rf kmeans_sequential &&\ rm -rf kmeans_sequential_sorting &&\ rm -rf kmeans_parallel
+		rm -rf *.csv &&\
+		rm -rf main.cu &&\
+		rm -rf kmeans_sequential &&\
+		rm -rf kmeans_sequential_sorting &&\
+		rm -rf kmeans_parallel &&\
+		rm -rf kmeans_parallel_const

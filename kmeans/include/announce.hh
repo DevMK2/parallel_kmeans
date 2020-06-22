@@ -50,4 +50,6 @@ public:
     }
 };
 
+static Announce announce = Announce(KSize, DataSize, FeatSize);
+
 #endif

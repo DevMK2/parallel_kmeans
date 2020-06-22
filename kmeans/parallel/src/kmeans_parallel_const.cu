@@ -8,11 +8,12 @@ namespace KMeans {
 __global__ void labeling(DataPoint* const data);
     namespace Labeling {
     __device__
-    Data_T euclideanDistSQR ( const Data_T* const __restrict__ lhs, const Data_T* const __restrict__ rhs);
+    Data_T euclideanDistSQR (const Data_T* const __restrict__ lhs, const Data_T* const __restrict__ rhs);
+    __device__
+    void setClosestCentroid(DataPoint* const data);
     }
 };
 
-__device__ __constant__ Label_T constCentroidLabels[KSize];
 __device__ __constant__ Data_T constCentroidValues[KSize*FeatSize];
 
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
@@ -40,7 +41,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     int numThread_labeling = 128; /*TODO get from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
-    int threashold = 3; // 
+    int threashold = 1; // 
     while(threashold-- > 0) {
         cudaDeviceSynchronize();
         memcpyCentroidsToConst(centroids);
@@ -67,8 +68,6 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     cudaAssert( cudaHostUnregister(newCentroids) );
     cudaAssert( cudaHostUnregister(isSame) );
 
-    delete[] data;
-    delete[] centroids;
     delete[] newCentroids;
     delete isSame;
 }
@@ -92,25 +91,26 @@ void KMeans::labeling(DataPoint* const data) {
     if(idx >= DataSize)
         return;
 
+    DataPoint& threadDataPoint = data[idx];
+
+    Labeling::setClosestCentroid(&threadDataPoint);
+}
+
+__device__
+void KMeans::Labeling::setClosestCentroid(DataPoint* const data) {
     Label_T minDistLabel = 0;
     Data_T minDistSQR = MaxDataValue;
 
     for(int i=0; i!=KSize; ++i) {
-        Data_T currDistSQR = 0;
-        Data_T currValues = data[idx].value[i];
-
-        for(int j=0; j!=FeatSize; ++j) {
-            Data_T dist = constCentroidValues[i*blockDim.x + j] - currValues;
-            currDistSQR += dist*dist;
-        }
+        Data_T currDistSQR = KMeans::Labeling::euclideanDistSQR(data->value, &constCentroidValues[i*FeatSize]);
 
         if(minDistSQR > currDistSQR) {
-            minDistLabel = constCentroidLabels[i];
+            minDistLabel = i;
             minDistSQR = currDistSQR;
         }
     }
 
-    data[idx].label = minDistLabel;
+    data->label = minDistLabel;
 }
 
 __device__ 
@@ -120,7 +120,7 @@ Data_T KMeans::Labeling::euclideanDistSQR ( const Data_T* const __restrict__ lhs
 
     Data_T distSQR = 0;
 
-    for(int featIdx=0; featIdx!=FeatSize; ++featIdx) {
+    for(int i=0; i!=FeatSize; ++i) {
         Data_T dist = *valuePtrLHS - *valuePtrRHS;
 
         distSQR += dist*dist;
@@ -131,9 +131,6 @@ Data_T KMeans::Labeling::euclideanDistSQR ( const Data_T* const __restrict__ lhs
 
     return distSQR;
 }
-
-__device__ void KMeans::Labeling::setClosestCentroid(const DataPoint* __restrict__ centroids, DataPoint* const data) { }
-__device__ Data_T KMeans::Labeling::euclideanDistSQR ( const DataPoint* const __restrict__ lhs, const DataPoint* const __restrict__ rhs) { return Data_T(0); }
 
 /// update centroids //////////////////////////////////////////////////////////////////////////////
 __global__
@@ -267,9 +264,6 @@ void memcpyCentroidsFromConst(DataPoint* centroids) {
     Data_T values[KSize*FeatSize];
 
     cudaAssert (
-        cudaMemcpyFromSymbol(labels, constCentroidLabels, sizeof(Label_T))
-    );
-    cudaAssert (
         cudaMemcpyFromSymbol(values, constCentroidValues, KSize*FeatSize*sizeof(Data_T))
     );
 
@@ -283,19 +277,13 @@ void memcpyCentroidsFromConst(DataPoint* centroids) {
 }
 
 void memcpyCentroidsToConst(DataPoint* centroids) {
-    Label_T labels[KSize];
     Data_T values[KSize*FeatSize];
     
     for(int i=0; i!=KSize; ++i) {
-        labels[i] = centroids[i].label;
-
         for(int j=0; j!=FeatSize; ++j) {
             values[i*FeatSize+j] = centroids[i].value[j];
         }
     }
-    cudaAssert (
-        cudaMemcpyToSymbol(constCentroidLabels, labels, KSize*sizeof(Label_T))
-    );
     cudaAssert (
         cudaMemcpyToSymbol(constCentroidValues, values, KSize*FeatSize*sizeof(Data_T))
     );

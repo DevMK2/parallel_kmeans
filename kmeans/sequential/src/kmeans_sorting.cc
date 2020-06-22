@@ -18,8 +18,6 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     Log<LoopEvaluate, 1024> log("./results/sequential_sorting_deep");
 #endif
 #endif
-    //Announce announce(KSize, DataSize, FeatSize);
-
     auto newCentroids = new DataPoint[KSize];
 
     while(true) {

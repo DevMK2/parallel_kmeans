@@ -26,7 +26,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     int numThread_labeling = 128; /*TODO get from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
-    int threashold = 5; // 
+    int threashold = 1; // 
     while(threashold-- > 0) {
         KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(centroids, data);
 
@@ -51,8 +51,6 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     cudaAssert( cudaHostUnregister(newCentroids) );
     cudaAssert( cudaHostUnregister(isSame) );
 
-    delete[] data;
-    delete[] centroids;
     delete[] newCentroids;
     delete isSame;
 }
@@ -75,7 +73,10 @@ void KMeans::labeling(const DataPoint* const centroids, DataPoint* const data) {
     const int& idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= DataSize)
         return;
-    Labeling::setClosestCentroid(centroids, data+idx);
+
+    DataPoint threadDataPoint = data[idx];
+    
+    Labeling::setClosestCentroid(centroids, &threadDataPoint);
 }
 
 __device__
@@ -88,7 +89,7 @@ void KMeans::Labeling::setClosestCentroid(const DataPoint* centroids, DataPoint*
         Data_T currDistSQR = euclideanDistSQR(centroidPtr, data);
 
         if(minDistSQR > currDistSQR) {
-            minDistLabel = centroidPtr->label;
+            minDistLabel = kIdx;
             minDistSQR = currDistSQR;
         }
 
