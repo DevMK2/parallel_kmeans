@@ -50,6 +50,12 @@ kmeans_parallel_sorting: main.o kmeans_parallel_sorting.o
 		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
 		rm -rf main.cu
 
+kmeans_parallel_sorting_stream: main.o kmeans_parallel_sorting_stream.o
+	cp main.cc main.cu &&\
+	$(CU) $(CUFLAGS) -g -G $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL &&\
+		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
+		rm -rf main.cu
+
 npy_test: npy_test.o
 	python3 tests/make_mnist_seq.py &&\
 	mkdir -p temp &&\
@@ -65,4 +71,5 @@ clean:
 		rm -rf kmeans_sequential_sorting &&\
 		rm -rf kmeans_parallel &&\
 		rm -rf kmeans_parallel_const &&\
-		rm -rf kmeans_parallel_sorting
+		rm -rf kmeans_parallel_sorting &&\
+		rm -rf kmeans_parallel_sorting_stream
