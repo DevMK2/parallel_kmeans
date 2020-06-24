@@ -21,8 +21,6 @@ namespace Labeling {
 __device__ Data_T euclideanDistSQR(const Data_T* const __restrict__ lhs, const Data_T* const __restrict__ rhs);
 };
 
-///\ Transpose
-__global__ void labeling(Trans_DataValues const data);
 __global__ void labeling(Labels_T* const labels, Trans_DataValues* const data);
 
 __global__ void updateCentroidAccum(DataPoint* const centroids, const DataPoint* const data);
@@ -30,6 +28,10 @@ __global__ void updateCentroidDivide(DataPoint* const centroids);
 namespace Update {
 __device__ void addValuesLtoR(const Data_T* const lhs, Data_T* const rhs);
 };
+
+///\ Transpose
+__global__ void labeling(Trans_DataValues const data);
+__global__ void updateCentroidAccum(DataPoint* const centroids, const Trans_DataValues data);
 
 static void initCentroids(DataPoint* const centroids, const DataPoint* const data) {
     for(int kIdx=0; kIdx!=KSize; ++kIdx) {
@@ -54,7 +56,7 @@ __global__ static void checkIsSame(bool* const isSame, DataPoint* const centroid
     Data_T prevValue = centroids[blockIdx.x].value[threadIdx.x];
     Data_T newValue = newCentroids[blockIdx.x].value[threadIdx.x];
 
-    if(prevValue != newValue) {
+    if(prevValue - newValue > 0.0001) {
         *isSame = false;
     }
 }
