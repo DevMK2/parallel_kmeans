@@ -35,6 +35,21 @@ public:
         std::cout << std::endl;
     }
 
+    void LabelsTransposed(const Labels_T labels) {
+        static int tryCount = 0;
+        int labelSizes[KSize] = {0,}; 
+
+        std::cout << "labeling result, number of datas foreach label .. (try:"<<++tryCount<< ")" << std::endl;
+
+        for(int dataIdx=0; dataIdx!=DataSize; ++dataIdx)
+            labelSizes[labels[dataIdx]]++;
+
+        for(int kIdx=0; kIdx!=KSize; ++kIdx)
+            std::cout << kIdx << " : " << labelSizes[kIdx] << std::endl;
+
+        std::cout << std::endl;
+    }
+
     void Labels(const DataPoint* data) {
         static int tryCount = 0;
         int labelSizes[KSize] = {0,}; 

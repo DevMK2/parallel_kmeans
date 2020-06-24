@@ -16,10 +16,34 @@ __device__ __constant__ size_t constLabelCounts[KSize];
 __device__ __constant__ size_t constLabelFirstIdxes[KSize];
 __device__ __constant__ size_t constLabelLastIdxes[KSize];
 
+#define Trans_DataValues_IDX(x,y) y*DataSize+x
+#define CentroidValues_IDX(x,y) y*FeatSize+x
+
+Labels_T dataLabels;
+Trans_DataValues dataValuesTransposed;
+void transposDataPointers(const DataPoint* const data, Trans_DataValues transposed) {
+    for(int i=0; i!=DataSize; ++i) {
+        dataLabels[i] = data[i].label;
+
+        for(int j=0; j!=FeatSize; ++j) {
+            transposed[j*DataSize + i] = data[i].value[j];
+        }
+    }
+
+    // TODO Delete me
+    for(int i=0; i!=FeatSize; ++i)
+        for(int j=0; j!=DataSize; ++j)
+            assert(transposed[i*DataSize + j] == data[j].value[i]);
+}
 
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
+    transposDataPointers(data, dataValuesTransposed);
+
     cudaAssert (
-        cudaHostRegister(data, DataSize*sizeof(DataPoint), cudaHostRegisterPortable)
+        cudaHostRegister(dataLabels, DataSize*sizeof(Label_T), cudaHostRegisterPortable)
+    );
+    cudaAssert (
+        cudaHostRegister(dataValuesTransposed, FeatSize*DataSize*sizeof(Data_T), cudaHostRegisterPortable)
     );
     cudaAssert (
         cudaHostRegister(centroids, KSize*sizeof(DataPoint), cudaHostRegisterPortable)
@@ -39,17 +63,18 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     );
 
     //study(deviceQuery());
-    int numThread_labeling = 8; /*TODO get from study*/
+    int numThread_labeling = 64; /*TODO get from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
     int threashold = 2;
     while(threashold-- > 0) {
         cudaDeviceSynchronize();
         memcpyCentroidsToConst(centroids);
-        KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(data);
+        KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(&dataLabels, &dataValuesTransposed);
 
         cudaDeviceSynchronize();
-        sortAndGetLabelCounts(data, labelCounts, labelFirstIdxes, labelLastIdxes);
+        announce.LabelsTransposed(dataLabels);
+        //sortAndGetLabelCounts(data, labelCounts, labelFirstIdxes, labelLastIdxes);
         memcpyLabelCountToConst(labelCounts, labelFirstIdxes, labelLastIdxes);
         size_t maxLabelCount = 0;
         for(int i=0; i!=KSize; ++i)
@@ -57,9 +82,9 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 
         resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
 
-        dim3 dimBlock(UpdateCentroidBlockDim, 1, 1);
-        dim3 dimGrid(ceil(maxLabelCount/UpdateCentroidBlockDim), KSize, 1);
-        KMeans::updateCentroidAccum<<<dimGrid, dimBlock>>>(newCentroids, data);
+        //dim3 dimBlock(UpdateCentroidBlockDim, 1, 1);
+        //dim3 dimGrid(ceil(maxLabelCount/UpdateCentroidBlockDim), KSize, 1);
+        //KMeans::updateCentroidAccum<<<dimGrid, dimBlock>>>(newCentroids, data);
         KMeans::updateCentroidDivide<<<KSize, FeatSize>>>(newCentroids);
 
         KMeans::checkIsSame<<<KSize, FeatSize>>>(isSame, centroids, newCentroids);
@@ -72,10 +97,12 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 
     cudaDeviceSynchronize();
     cudaAssert( cudaPeekAtLastError());
-    announce.Labels(data);
+    //announce.Labels(data);
     announce.InitCentroids(newCentroids);
 
-    cudaAssert( cudaHostUnregister(data) );
+    cudaAssert( cudaHostUnregister(dataLabels));
+    cudaAssert( cudaHostUnregister(dataValuesTransposed));
+    //cudaAssert( cudaHostUnregister(data) );
     cudaAssert( cudaHostUnregister(centroids) );
     cudaAssert( cudaHostUnregister(newCentroids) );
     cudaAssert( cudaHostUnregister(isSame) );
@@ -89,44 +116,33 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 
 /// labeling ////////////////////////////////////////////////////////////////////////////////////
 __global__
-void KMeans::labeling(DataPoint* const data) {
+void KMeans::labeling(Labels_T* const labels, Trans_DataValues* const data) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= DataSize)
         return;
 
-    DataPoint threadData = data[idx];
+    Data_T distSQRSums[KSize]{0,};
 
-    Label_T minDistLabel = 0;
-    Data_T minDistSQR = MaxDataValue;
+    for(int i=0; i!=FeatSize; ++i) {
+        Data_T currValue = (*data)[Trans_DataValues_IDX(idx, i)];
 
-    for(int i=0; i!=KSize; ++i) {
-        Data_T currDistSQR = KMeans::Labeling::euclideanDistSQR(threadData.value, constCentroidValues + i*FeatSize);
-        if(minDistSQR > currDistSQR) {
-            minDistLabel = i;
-            minDistSQR = currDistSQR;
+        for(int j=0; j!=KSize; ++j) {
+            Data_T currDistSQR = 0;
+            Data_T currDist = currValue - constCentroidValues[CentroidValues_IDX(i,j)];
+            distSQRSums[j] += currDist * currDist;
         }
     }
 
-    data[idx].label = minDistLabel;
-}
-
-__device__ 
-Data_T KMeans::Labeling::euclideanDistSQR ( const Data_T* const __restrict__ lhs, const Data_T* const __restrict__ rhs) { 
-    const Data_T* valuePtrLHS = lhs;
-    const Data_T* valuePtrRHS = rhs;
-
-    Data_T distSQR = 0;
-
-    for(int i=0; i!=FeatSize; ++i) {
-        Data_T dist = *valuePtrLHS - *valuePtrRHS;
-
-        distSQR += dist*dist;
-
-        valuePtrLHS++;
-        valuePtrRHS++;
+    Data_T minDistSQRSum = MaxDataValue;
+    Label_T minDistLabel = 0;
+    for(int i=0; i!=KSize; ++i) {
+        if(minDistSQRSum > distSQRSums[i]) {
+            minDistSQRSum = distSQRSums[i];
+            minDistLabel = i;
+        }
     }
 
-    return distSQR;
+    (*labels)[idx]= minDistLabel;
 }
 
 /// update centroids //////////////////////////////////////////////////////////////////////////////

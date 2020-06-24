@@ -133,4 +133,3 @@ void KMeans::Update::addValuesLtoR(const Data_T* const lhs, Data_T* const rhs) {
     for(int featIdx=0; featIdx!=FeatSize; ++featIdx)
         *(rhsPtr++) += *(lhsPtr++);
 }
-
