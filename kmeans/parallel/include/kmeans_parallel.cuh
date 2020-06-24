@@ -21,7 +21,7 @@ namespace Labeling {
 __device__ Data_T euclideanDistSQR(const Data_T* const __restrict__ lhs, const Data_T* const __restrict__ rhs);
 };
 
-__global__ void labeling(size_t dataSize, Labels_T const labels, Trans_DataValues const data);
+__global__ void labeling(size_t dataSize, size_t featSize, Labels_T const labels, Trans_DataValues const data);
 
 __global__ void updateCentroidAccum(DataPoint* const centroids, const DataPoint* const data);
 __global__ void updateCentroidDivide(DataPoint* const centroids);
