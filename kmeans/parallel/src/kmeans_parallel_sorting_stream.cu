@@ -124,6 +124,7 @@ void KMeans::labeling(Labels_T const labels, Trans_DataValues const data) {
             Data_T currDist = currValue - constCentroidValues[CentroidValues_IDX(i,j)];
             distSQRSums[j] += currDist * currDist;
         }
+	__syncthreads();
     }
 
     Data_T minDistSQRSum = MaxDataValue;
