@@ -112,22 +112,21 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 __global__
 void KMeans::labeling(Labels_T const labels, Trans_DataValues const data) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if(idx >= DataSize)
+    if(idx >= dataSize)
         return;
 
     Data_T distSQRSums[KSize]{0,};
 
-    for(int i=0; i!=FeatSize; ++i) {
+    for(int i=0; i!=featSize; ++i) {
         Data_T currValue = data[i*DataSize+ idx];
 
-        for(int j=0; j!=KSize; ++j) {
+        for(int j=0; j!=kSize; ++j) {
             Data_T currDist = currValue - constCentroidValues[j*FeatSize+ i];
             distSQRSums[j] += currDist * currDist;
         }
-	__syncthreads();
     }
 
-    Data_T minDistSQRSum = MaxDataValue;
+    Data_T minDistSQRSum = 987654321.0;
     Label_T minDistLabel = 0;
     for(int i=0; i!=KSize; ++i) {
         if(minDistSQRSum > distSQRSums[i]) {
