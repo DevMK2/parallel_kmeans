@@ -1,5 +1,4 @@
 results/*.csv
-results/*-report
 results/*.txt
 tests/mnist_seq.txt
 kmeans_sequential
@@ -8,3 +7,4 @@ kmeans_parallel
 kmeans_parallel_const
 kmeans_parallel_sorting
 kmeans_parallel_sorting_stream
+**/*.swp

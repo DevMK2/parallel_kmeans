@@ -3,7 +3,7 @@
 #include <algorithm>
 #include "log.cc"
 
-static const int UpdateCentroidBlockDim = 256;
+static const int UpdateCentroidBlockDim = 1024;
 
 void sortAndGetLabelCounts(DataPoint* const, size_t* const, size_t* const, size_t* const);
 void memcpyCentroidsToConst(DataPoint*);
@@ -18,38 +18,16 @@ __device__ __constant__ size_t constLabelLastIdxes[KSize];
 
 #define Trans_DataValues_IDX(x,y) y*DataSize+x
 #define CentroidValues_IDX(x,y) y*FeatSize+x
-
-Labels_T dataLabels;
-Trans_DataValues dataValuesTransposed;
-
-void transposDataPointers(const DataPoint* const data, Trans_DataValues transposed) {
-    for(int i=0; i!=DataSize; ++i) {
-        dataLabels[i] = data[i].label;
-
-        for(int j=0; j!=FeatSize; ++j) {
-            transposed[j*DataSize + i] = data[i].value[j];
-        }
-    }
-
-    // TODO Delete me
-    for(int i=0; i!=FeatSize; ++i)
-        for(int j=0; j!=DataSize; ++j)
-            assert(transposed[i*DataSize + j] == data[j].value[i]);
-}
-
-void untransposDataPointers(const Trans_DataValues transposed, DataPoint* const data) {
-    for(int i=0; i!=DataSize; ++i) {
-        data[i].label = dataLabels[i];
-
-        for(int j=0; j!=FeatSize; ++j) {
-            data[i].value[j] = transposed[j*DataSize + i];
-        }
-    }
-}
+void transposeDataPointers(const DataPoint* const data, Labels_T labels, Trans_DataValues transposed);
+void untransposeDataPointers(const Trans_DataValues transposed, Labels_T labels, DataPoint* const data);
 
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     Log<> log("./results/parallel");
-    transposDataPointers(data, dataValuesTransposed);
+
+    Labels_T dataLabels = new Label_T[DataSize];
+    Trans_DataValues dataValuesTransposed = new Data_T[FeatSize * DataSize];
+
+    transposeDataPointers(data, dataLabels, dataValuesTransposed);
 
     cudaAssert (
         cudaHostRegister(dataLabels, DataSize*sizeof(Label_T), cudaHostRegisterPortable)
@@ -65,29 +43,28 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     auto labelFirstIdxes = new size_t[KSize]{0,};
     auto labelLastIdxes = new size_t[KSize]{0,};
     auto newCentroids = new DataPoint[KSize];
-    bool* isSame = new bool(true);
+    auto isUpdated = new bool(true);
 
     cudaAssert (
         cudaHostRegister(newCentroids, KSize*sizeof(DataPoint), cudaHostRegisterPortable)
     );
     cudaAssert (
-        cudaHostRegister(isSame, sizeof(bool), cudaHostRegisterPortable)
+        cudaHostRegister(isUpdated, sizeof(bool), cudaHostRegisterPortable)
     );
 
-    //study(deviceQuery());
-    int numThread_labeling = 512; /*TODO get from study*/
+    int numThread_labeling = 256; /*TODO get from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
-    int threashold = 20;
+    int threashold = 5;
     while(threashold-- > 0) {
         cudaDeviceSynchronize();
         memcpyCentroidsToConst(centroids);
-        KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(&dataLabels, &dataValuesTransposed);
+        KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(dataLabels, dataValuesTransposed);
 
         cudaDeviceSynchronize();
-        untransposDataPointers(dataValuesTransposed, data);
+        untransposeDataPointers(dataValuesTransposed, dataLabels, data);
         sortAndGetLabelCounts(data, labelCounts, labelFirstIdxes, labelLastIdxes);
-        transposDataPointers(data, dataValuesTransposed);
+        transposeDataPointers(data, dataLabels, dataValuesTransposed);
         announce.Labels(data);
 
         memcpyLabelCountToConst(labelCounts, labelFirstIdxes, labelLastIdxes);
@@ -102,13 +79,11 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
         KMeans::updateCentroidAccum<<<dimGrid, dimBlock>>>(newCentroids, dataValuesTransposed);
         KMeans::updateCentroidDivide<<<KSize, FeatSize>>>(newCentroids);
 
-        //announce.InitCentroids(newCentroids);
-
-        KMeans::checkIsSame<<<KSize, FeatSize>>>(isSame, centroids, newCentroids);
+        KMeans::checkIsSame<<<KSize, FeatSize>>>(isUpdated, centroids, newCentroids);
         cudaDeviceSynchronize();
-        if(*isSame)
+        if(*isUpdated)
             break;
-        *isSame = true;
+        *isUpdated = true;
 
         memcpyCentroid<<<KSize,FeatSize>>>(centroids, newCentroids);
     }
@@ -122,19 +97,20 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     cudaAssert( cudaHostUnregister(dataValuesTransposed));
     cudaAssert( cudaHostUnregister(centroids) );
     cudaAssert( cudaHostUnregister(newCentroids) );
-    cudaAssert( cudaHostUnregister(isSame) );
+    cudaAssert( cudaHostUnregister(isUpdated) );
 
+    delete[] dataLabels;
+    delete[] dataValuesTransposed;
     delete[] labelCounts;
     delete[] labelFirstIdxes;
     delete[] labelLastIdxes;
     delete[] newCentroids;
-    delete isSame;
+    delete isUpdated;
     log.Lap("KMeans-Parallel End");
 }
 
-/// labeling ////////////////////////////////////////////////////////////////////////////////////
 __global__
-void KMeans::labeling(Labels_T* const labels, Trans_DataValues* const data) {
+void KMeans::labeling(Labels_T const labels, Trans_DataValues const data) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= DataSize)
         return;
@@ -142,7 +118,7 @@ void KMeans::labeling(Labels_T* const labels, Trans_DataValues* const data) {
     Data_T distSQRSums[KSize]{0,};
 
     for(int i=0; i!=FeatSize; ++i) {
-        Data_T currValue = (*data)[Trans_DataValues_IDX(idx, i)];
+        Data_T currValue = data[Trans_DataValues_IDX(idx, i)];
 
         for(int j=0; j!=KSize; ++j) {
             Data_T currDist = currValue - constCentroidValues[CentroidValues_IDX(i,j)];
@@ -159,7 +135,7 @@ void KMeans::labeling(Labels_T* const labels, Trans_DataValues* const data) {
         }
     }
 
-    (*labels)[idx]= minDistLabel;
+    labels[idx] = minDistLabel;
 }
 
 /// update centroids //////////////////////////////////////////////////////////////////////////////
@@ -292,4 +268,24 @@ void memcpyLabelCountFromConst(size_t* labelCount, size_t* labelFirstIdxes, size
     cudaAssert (
         cudaMemcpyFromSymbol(labelLastIdxes, constLabelLastIdxes, KSize*sizeof(size_t))
     );
+}
+
+void transposeDataPointers(const DataPoint* const data, Labels_T labels, Trans_DataValues transposed) {
+    for(int i=0; i!=DataSize; ++i) {
+        labels[i] = data[i].label;
+
+        for(int j=0; j!=FeatSize; ++j) {
+            transposed[j*DataSize + i] = data[i].value[j];
+        }
+    }
+}
+
+void untransposeDataPointers(const Trans_DataValues transposed, Labels_T labels, DataPoint* const data) {
+    for(int i=0; i!=DataSize; ++i) {
+        data[i].label = labels[i];
+
+        for(int j=0; j!=FeatSize; ++j) {
+            data[i].value[j] = transposed[j*DataSize + i];
+        }
+    }
 }
