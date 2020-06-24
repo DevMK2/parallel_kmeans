@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 CC = g++
 CU = nvcc
-CUFLAGS = --ptxas-options=-v -arch=sm_50 -rdc=true
+CUFLAGS = -lineinfo --ptxas-options=-v -arch=sm_50 -rdc=true
 CFLAGS = --std=c++14 -o
 INCLUDES = -Iinclude -I./sequential/include -I./parallel/include -I../lap/src
 LIBDIR = -Llib -L../lap/devel/lib
@@ -34,25 +34,25 @@ kmeans_sequential_sorting: main.o kmeans_sorting.o
 
 kmeans_parallel: main.o kmeans_parallel.o
 	cp main.cc main.cu &&\
-	$(CU) $(CUFLAGS) -lineinfo -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL&&\
+	$(CU) $(CUFLAGS) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL&&\
 		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
 		rm -rf main.cu
 
 kmeans_parallel_const: main.o kmeans_parallel_const.o
 	cp main.cc main.cu &&\
-	$(CU) $(CUFLAGS) -lineinfo -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL&&\
+	$(CU) $(CUFLAGS) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL&&\
 		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
 		rm -rf main.cu
 
 kmeans_parallel_sorting: main.o kmeans_parallel_sorting.o
 	cp main.cc main.cu &&\
-	$(CU) $(CUFLAGS) -lineinfo -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL &&\
+	$(CU) $(CUFLAGS) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL &&\
 		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
 		rm -rf main.cu
 
 kmeans_parallel_sorting_stream: main.o kmeans_parallel_sorting_stream.o
 	cp main.cc main.cu &&\
-	$(CU) $(CUFLAGS) -lineinfo -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL &&\
+	$(CU) $(CUFLAGS) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL &&\
 		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
 		rm -rf main.cu
 
