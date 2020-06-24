@@ -59,7 +59,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     while(threashold-- > 0) {
         cudaDeviceSynchronize();
         memcpyCentroidsToConst(centroids);
-        KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(DataSize, FeatSize, dataLabels, dataValuesTransposed);
+        KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(dataLabels, dataValuesTransposed);
 
         cudaDeviceSynchronize();
         untransposeDataPointers(dataValuesTransposed, dataLabels, data);
@@ -110,7 +110,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 }
 
 __global__
-void KMeans::labeling(size_t dataSize, size_t featSize, Labels_T const labels, Trans_DataValues const data) {
+void KMeans::labeling(Labels_T const labels, Trans_DataValues const data) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= DataSize)
         return;
@@ -118,10 +118,10 @@ void KMeans::labeling(size_t dataSize, size_t featSize, Labels_T const labels, T
     Data_T distSQRSums[KSize]{0,};
 
     for(int i=0; i!=FeatSize; ++i) {
-        Data_T currValue = data[i*dataSize + idx];
+        Data_T currValue = data[i*DataSize+ idx];
 
         for(int j=0; j!=KSize; ++j) {
-            Data_T currDist = currValue - constCentroidValues[j*featSize + i];
+            Data_T currDist = currValue - constCentroidValues[j*FeatSize+ i];
             distSQRSums[j] += currDist * currDist;
         }
 	__syncthreads();
