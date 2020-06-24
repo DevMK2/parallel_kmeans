@@ -116,9 +116,10 @@ void KMeans::labeling(Labels_T const labels, Trans_DataValues const data) {
         return;
 
     Data_T distSQRSums[KSize]{0,};
+    size_t dataSize = DataSize;
 
     for(int i=0; i!=FeatSize; ++i) {
-        Data_T currValue = data[Trans_DataValues_IDX(idx, i)];
+        Data_T currValue = data[i*dataSize + idx];
 
         for(int j=0; j!=KSize; ++j) {
             Data_T currDist = currValue - constCentroidValues[CentroidValues_IDX(i,j)];

@@ -1,6 +1,7 @@
 cnpy
 **/*.o
 **/*.csv
+**/*.swp
 
 #temp!!
 kmeans/results/___visualize_results___
