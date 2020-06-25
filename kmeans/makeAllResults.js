@@ -92,7 +92,7 @@ function backup(filePath) {
 
 function backdown(filePath) {
   const srcPath = getBackupPath(filePath);
-  if(fs.exsistsSync(srcPath))
+  if(fs.existsSync(srcPath))
     fs.copyFileSync(srcPath, filePath);
 }
 

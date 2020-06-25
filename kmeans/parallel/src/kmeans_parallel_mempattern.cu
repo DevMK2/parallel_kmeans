@@ -56,7 +56,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
         cudaHostRegister(isUpdated, sizeof(bool), cudaHostRegisterPortable)
     );
 
-    int numThread_labeling = 256; /*TODO get from study*/
+    int numThread_labeling = 1024; /*TODO get from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
 #ifdef DEEP_LOG
@@ -89,9 +89,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 
         resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
 
-        dim3 dimBlock(UpdateCentroidBlockDim, 1, 1);
-        dim3 dimGrid(ceil(maxLabelCount/UpdateCentroidBlockDim), KSize, 1);
-        KMeans::updateCentroidAccum<<<dimGrid, dimBlock>>>(newCentroids, dataValuesTransposed);
+        KMeans::updateCentroidAccum<<<1, 1>>>(newCentroids, dataValuesTransposed);
         KMeans::updateCentroidDivide<<<KSize, FeatSize>>>(newCentroids);
 #ifdef DEEP_LOG
         cudaDeviceSynchronize();
@@ -168,12 +166,10 @@ void KMeans::labeling(Labels_T const labels, Trans_DataValues const data) {
 // gridDim = 10, ceil(maxLabelCount/blockDim)
 // width = maxLabelCount
 // blockIdx.y = label
-__global__
-void KMeans::updateCentroidAccum(DataPoint* const centroids, const Trans_DataValues data) {
+__global__ void updateCentroidAccumChild(const int label, DataPoint* const centroids, const Trans_DataValues data) {
     __shared__ Data_T Sum[UpdateCentroidBlockDim];
 
     const int tID = threadIdx.x;
-    const Label_T label = blockIdx.y;
 
     const size_t labelFirstIdx = constLabelFirstIdxes[label];
     const size_t labelLastIdx = constLabelLastIdxes[label];
@@ -203,6 +199,16 @@ void KMeans::updateCentroidAccum(DataPoint* const centroids, const Trans_DataVal
 
         atomicAdd(&(centroids[label].value[featIdx]), Sum[tID]);
     }
+}
+
+__global__
+void KMeans::updateCentroidAccum(DataPoint* const centroids, const Trans_DataValues data) {
+    for(int i=0; i!=KSize; ++i) {
+        dim3 dimBlock(UpdateCentroidBlockDim, 1, 1);
+        dim3 dimGrid((constLabelCounts[i]+UpdateCentroidBlockDim-1) / UpdateCentroidBlockDim, 1, 1);
+        updateCentroidAccumChild<<<dimGrid, dimBlock>>>(i, centroids, data);
+    }
+    cudaDeviceSynchronize();
 }
 
 __global__
