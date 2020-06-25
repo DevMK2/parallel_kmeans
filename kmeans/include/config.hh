@@ -1,6 +1,9 @@
 #ifndef __CONFIG_HH__
 #define __CONFIG_HH__
 
+#define DEEP_LOG
+#define SPARSE_LOG
+
 #include "npy.hh" // npy size_t
 #include <string>
 
