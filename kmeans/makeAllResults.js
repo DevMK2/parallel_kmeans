@@ -11,7 +11,7 @@ const makeTargets = [
   ,'kmeans_parallel'
   ,'kmeans_parallel_const'
   ,'kmeans_parallel_sorting'
-  ,'kmeans_parallel_sorting_stream'
+  ,'kmeans_parallel_mempattern'
 ];
 
 main();

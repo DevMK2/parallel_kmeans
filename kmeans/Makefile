@@ -24,8 +24,6 @@ default_target: kmeans_sequential
 #all: kmeans_sequential kmeans_sequential_sorting kmeans_parallel kmeans_parallel_const
 npy_test_clean: npy_test clean
 
-get_data: kmeans_sequential kmeans_sequential_sorting kmeans_parallel kmeans_parallel_const kmeans_parallel_sorting kmeans_parallel_sorting_stream
-
 kmeans_sequential: main.o kmeans.o
 	$(CC) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) &&\
 		./$@ ../mnist/mnist_encoded/encoded_train_ae.npy
@@ -52,7 +50,7 @@ kmeans_parallel_sorting: main.o kmeans_parallel_sorting.o
 		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
 		rm -rf main.cu
 
-kmeans_parallel_sorting_stream: main.o kmeans_parallel_sorting_stream.o
+kmeans_parallel_mempattern: main.o kmeans_parallel_mempattern.o
 	cp main.cc main.cu &&\
 	$(CU) $(CUFLAGS) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL &&\
 		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
@@ -74,4 +72,4 @@ clean:
 		rm -rf kmeans_parallel &&\
 		rm -rf kmeans_parallel_const &&\
 		rm -rf kmeans_parallel_sorting &&\
-		rm -rf kmeans_parallel_sorting_stream
+		rm -rf kmeans_parallel_mempattern
