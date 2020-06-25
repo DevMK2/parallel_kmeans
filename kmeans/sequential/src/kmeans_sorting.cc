@@ -1,6 +1,4 @@
-//#define SPARSE_LOG
-#define DEEP_LOG
-//#include "announce.hh"
+#include "announce.hh"
 #include "kmeans.hh"
 #include <algorithm>
 #include "log.cc"
@@ -12,32 +10,35 @@ inline void resetLabelSizes() {
 
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 #ifdef SPARSE_LOG
-    Log<> log("./results/sequential_sorting");
-#else 
-#ifdef DEEP_LOG
-    Log<LoopEvaluate, 1024> log("./results/sequential_sorting_deep");
-#endif
+    Log<> log ( 
+        LogFileName.empty()?  "./results/sequential_sorting" : LogFileName
+    );
 #endif
     auto newCentroids = new DataPoint[KSize];
 
-    while(true) {
+#ifdef DEEP_LOG
+    Log<LoopEvaluate, 1024> deeplog (
+        LogFileName.empty()?  "./results/sequential_sorting_deep" : LogFileName+"_deep"
+    );
+#endif
+    while(threashold--) {
         resetLabelSizes();
 
         KMeans::labeling(centroids, data);
 #ifdef DEEP_LOG
-        log.Lap("labeling");
+        deeplog.Lap("labeling");
 #endif 
-        //announce.Labels(data);
+        announce.Labels(data);
 
         std::sort(data, data+DataSize, cmpDataPoint);
 #ifdef DEEP_LOG
-        log.Lap("sorting");
+        deeplog.Lap("sorting");
 #endif 
 
         resetNewCentroids(newCentroids);
         KMeans::updateCentroid(newCentroids, data);
 #ifdef DEEP_LOG
-        log.Lap("updateCentroid");
+        deeplog.Lap("updateCentroid");
 #endif 
 
         if(KMeans::isSame(centroids, newCentroids))
@@ -45,7 +46,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 
         memcpyCentroid(centroids, newCentroids);
 #ifdef DEEP_LOG
-        log.Lap("memcpyCentroid");
+        deeplog.Lap("check centroids");
 #endif 
     }
 

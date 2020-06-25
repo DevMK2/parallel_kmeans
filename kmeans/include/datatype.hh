@@ -1,16 +1,12 @@
 #ifndef __DATATYPE_HH__
 #define __DATATYPE_HH__
 #include "npy.hh" // npy size_t
+#include "config.hh"
 #include <vector>
 
 using Label_T = int;
 using Data_T = float;
 using Data_V = std::vector<Data_T>;
-
-static const size_t MaxDataValue = 987654321.0;
-static const size_t KSize = 10;
-static const size_t DataSize = 60000;
-static const size_t FeatSize = 200;
 
 struct DataPoint {
     Label_T label = 0;

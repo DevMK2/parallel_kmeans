@@ -2,8 +2,8 @@
 #define __ANNOUNCE_HH__
 
 #include "stdio.h"
-#include <iostream>
 #include "datatype.hh"
+#include <iostream>
 
 class Announce {
 private:

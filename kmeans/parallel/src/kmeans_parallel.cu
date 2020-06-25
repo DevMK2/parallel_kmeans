@@ -1,7 +1,13 @@
 #include "kmeans_parallel.cuh"
 #include "announce.hh"
+#include "log.cc"
 
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
+#ifdef SPARSE_LOG
+    Log<> log ( 
+        LogFileName.empty()?  "./results/parallel" : LogFileName
+    );
+#endif
     cudaAssert (
         cudaHostRegister(data, DataSize*sizeof(DataPoint), cudaHostRegisterPortable)
     );
@@ -10,48 +16,68 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     );
 
     auto newCentroids = new DataPoint[KSize];
-    bool* isSame = new bool(true);
+    bool* isUpdated = new bool(true);
 
     cudaAssert (
         cudaHostRegister(newCentroids, KSize*sizeof(DataPoint), cudaHostRegisterPortable)
     );
     cudaAssert (
-        cudaHostRegister(isSame, sizeof(bool), cudaHostRegisterPortable)
+        cudaHostRegister(isUpdated, sizeof(bool), cudaHostRegisterPortable)
     );
 
     //study(deviceQuery());
     int numThread_labeling = 4; /*TODO get from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
-    int threashold = 3; // 
-    while(threashold-- > 0) {
+#ifdef DEEP_LOG
+    Log<LoopEvaluate, 1024> deeplog (
+        LogFileName.empty()?  "./results/parallel_deep" : LogFileName+"_deep"
+    );
+#endif
+    while(threashold--) {
         KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(centroids, data);
-        //cudaDeviceSynchronize();
-        //announce.Labels(data);
+#ifdef DEEP_LOG
+        cudaDeviceSynchronize();
+        announce.Labels(data);
+        deeplog.Lap("labeling");
+#endif
 
         resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
 
         KMeans::updateCentroidAccum<<<numBlock_labeling,numThread_labeling>>>(newCentroids, data);
         KMeans::updateCentroidDivide<<<KSize, FeatSize>>>(newCentroids);
+#ifdef DEEP_LOG
+        cudaDeviceSynchronize();
+        deeplog.Lap("updateCentroid");
+#endif
 
-        KMeans::checkIsSame<<<KSize, FeatSize>>>(isSame, centroids, newCentroids);
-        //cudaDeviceSynchronize();
-        //if(isSame)
-            //break;
+        KMeans::checkIsSame<<<KSize, FeatSize>>>(isUpdated, centroids, newCentroids);
+        cudaDeviceSynchronize();
+        if(*isUpdated)
+            break;
+        *isUpdated = false;
 
         memcpyCentroid<<<KSize,FeatSize>>>(centroids, newCentroids);
+#ifdef DEEP_LOG
+        cudaDeviceSynchronize();
+        deeplog.Lap("check centroids");
+#endif
     }
     cudaDeviceSynchronize();
     cudaAssert( cudaPeekAtLastError());
+#ifdef SPARSE_LOG
+    log.Lap("KMeans-Parallel End");
+#endif
     announce.Labels(data);
+    announce.InitCentroids(newCentroids);
 
     cudaAssert( cudaHostUnregister(data) );
     cudaAssert( cudaHostUnregister(centroids) );
     cudaAssert( cudaHostUnregister(newCentroids) );
-    cudaAssert( cudaHostUnregister(isSame) );
+    cudaAssert( cudaHostUnregister(isUpdated) );
 
     delete[] newCentroids;
-    delete isSame;
+    delete isUpdated;
 }
 
 /// labeling ////////////////////////////////////////////////////////////////////////////////////

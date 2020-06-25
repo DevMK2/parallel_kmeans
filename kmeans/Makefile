@@ -24,6 +24,8 @@ default_target: kmeans_sequential
 #all: kmeans_sequential kmeans_sequential_sorting kmeans_parallel kmeans_parallel_const
 npy_test_clean: npy_test clean
 
+get_data: kmeans_sequential kmeans_sequential_sorting kmeans_parallel kmeans_parallel_const kmeans_parallel_sorting kmeans_parallel_sorting_stream
+
 kmeans_sequential: main.o kmeans.o
 	$(CC) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) &&\
 		./$@ ../mnist/mnist_encoded/encoded_train_ae.npy

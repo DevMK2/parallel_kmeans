@@ -22,7 +22,11 @@ void transposeDataPointers(const DataPoint* const data, Labels_T labels, Trans_D
 void untransposeDataPointers(const Trans_DataValues transposed, Labels_T labels, DataPoint* const data);
 
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
-    Log<> log("./results/parallel");
+#ifdef SPARSE_LOG
+    Log<> log ( 
+        LogFileName.empty()?  "./results/parallel_mempattern" : LogFileName
+    );
+#endif
 
     Labels_T dataLabels = new Label_T[DataSize];
     Trans_DataValues dataValuesTransposed = new Data_T[FeatSize * DataSize];
@@ -55,22 +59,33 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     int numThread_labeling = 256; /*TODO get from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
-    int threashold = 5;
-    while(threashold-- > 0) {
+#ifdef DEEP_LOG
+    Log<LoopEvaluate, 1024> deeplog (
+        LogFileName.empty()?  "./results/parallel_mampattern_deep" : LogFileName+"_deep"
+    );
+#endif
+    while(threashold--) {
         cudaDeviceSynchronize();
         memcpyCentroidsToConst(centroids);
         KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(dataLabels, dataValuesTransposed);
 
         cudaDeviceSynchronize();
+#ifdef DEEP_LOG
+        deeplog.Lap("labeling");
+#endif
+        announce.Labels(data);
+
         untransposeDataPointers(dataValuesTransposed, dataLabels, data);
         sortAndGetLabelCounts(data, labelCounts, labelFirstIdxes, labelLastIdxes);
         transposeDataPointers(data, dataLabels, dataValuesTransposed);
-        announce.Labels(data);
 
         memcpyLabelCountToConst(labelCounts, labelFirstIdxes, labelLastIdxes);
         size_t maxLabelCount = 0;
         for(int i=0; i!=KSize; ++i)
             maxLabelCount = std::max(maxLabelCount, labelCounts[i]);
+#ifdef DEEP_LOG
+        deeplog.Lap("sorting");
+#endif
 
         resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
 
@@ -78,18 +93,28 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
         dim3 dimGrid(ceil(maxLabelCount/UpdateCentroidBlockDim), KSize, 1);
         KMeans::updateCentroidAccum<<<dimGrid, dimBlock>>>(newCentroids, dataValuesTransposed);
         KMeans::updateCentroidDivide<<<KSize, FeatSize>>>(newCentroids);
+#ifdef DEEP_LOG
+        cudaDeviceSynchronize();
+        deeplog.Lap("updateCentroid");
+#endif
 
         KMeans::checkIsSame<<<KSize, FeatSize>>>(isUpdated, centroids, newCentroids);
         cudaDeviceSynchronize();
         if(*isUpdated)
             break;
-        *isUpdated = true;
+        *isUpdated = false;
 
         memcpyCentroid<<<KSize,FeatSize>>>(centroids, newCentroids);
+#ifdef DEEP_LOG
+        deeplog.Lap("check centroids");
+#endif
     }
 
     cudaDeviceSynchronize();
     cudaAssert( cudaPeekAtLastError());
+#ifdef SPARSE_LOG
+    log.Lap("KMeans-Parallel-MemPattern End");
+#endif
     announce.Labels(data);
     announce.InitCentroids(newCentroids);
 
@@ -106,7 +131,6 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     delete[] labelLastIdxes;
     delete[] newCentroids;
     delete isUpdated;
-    log.Lap("KMeans-Parallel End");
 }
 
 __global__
