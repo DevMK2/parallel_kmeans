@@ -2,8 +2,6 @@ cnpy
 **/*.o
 **/*.csv
 **/*.swp
-
-#temp!!
-kmeans/results/___visualize_results___
-kmeans/utils/*-report
-kmeans/utils/*.txt
+**/___visualize_results___
+**/*-report
+**/*.txt

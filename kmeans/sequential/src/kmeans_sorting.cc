@@ -53,7 +53,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     delete[] newCentroids;
 
 #ifdef SPARSE_LOG
-    log.Lap("KMeans-Sequentail-sorting End");
+    log.Lap("KMeans-Sequentail-sorting");
 #endif
 }
 

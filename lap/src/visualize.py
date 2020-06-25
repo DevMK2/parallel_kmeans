@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 from copy import deepcopy as dcopy
 from enum import Enum
 
+warterfallDatas = pd.DataFrame()
+
 RESULT_PATH = "___visualize_results___"
 ALERT = "visualize results directory has already been, it can overwrite previous results.\n Do you want to continue?(!y|n)"
 
@@ -29,31 +31,46 @@ def checkLogType(df):
         type = LogType.Loop
     return type
 
-
-def addIndex(df, logType=LogType.Warterfall):
+def addIndexLoop(df):
     df = dcopy(df)
 
     index = []
 
-    if logType == LogType.Loop:
-        for idx in df.index:
-            index.append(df.message[idx] + " ("+str(df.iteration[idx])+")")
-        del df['iteration']
-    else:
-        for idx in df.index:
-            index.append(df.message[idx])
+    for idx in df.index:
+        index.append(df.message[idx] + " ("+str(df.iteration[idx])+")")
+    del df['message']
+    del df['iteration']
+
+    df.index=index
+
+    return df
+
+def addIndexWarterfall(df):
+    global warterfallDatas
+
+    df = dcopy(df)
+
+    index = []
+
+    for idx in df.index:
+        index.append(df.message[idx])
 
     del df['message']
     df.index=index
 
-    return df
+    if warterfallDatas.empty:
+        warterfallDatas = df
+    else:
+        warterfallDatas = pd.concat([warterfallDatas, df])
+
+    return warterfallDatas
 
 
 def addLabel(plot, logType=LogType.Warterfall):
     if logType == LogType.Loop:
         plot.xlabel('Message(iteration)');
     else:
-        plot.xlabel('Message');
+        plot.xlabel('Executable');
     plot.ylabel('Elapsed time(ms)');
 
 
@@ -72,6 +89,8 @@ def filePostfix(path):
 
 
 def drawFile(filePath):
+    global warterfallDatas
+
     if filePostfix(filePath) != 'csv':
         return
 
@@ -80,9 +99,11 @@ def drawFile(filePath):
         return
 
     logType = checkLogType(data)
-    data = addIndex(data, logType)
-
-    drawData(filePath, data, logType, kind='bar')
+    if logType == LogType.Warterfall:
+        addIndexWarterfall(data)
+    else:
+        data = addIndexLoop(data)
+        drawData(filePath, data, logType, kind='bar')
 
 
 def drawDir(dirPath):
@@ -96,6 +117,8 @@ def drawDir(dirPath):
 
 
 if __name__ == '__main__':
+    global warterfallDatas
+
     if not os.path.isdir(RESULT_PATH):
         os.mkdir(RESULT_PATH)
     elif input(ALERT) in ('n','N'):
@@ -111,5 +134,6 @@ if __name__ == '__main__':
         print("No such file/dir "+relativeFilePath)
         sys.exit(-1)
 
+    drawData("Summary", warterfallDatas, LogType.Warterfall, kind='bar')
     plt.show();
     print(relativeFilePath)

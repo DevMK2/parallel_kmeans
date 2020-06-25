@@ -17,6 +17,7 @@ const makeTargets = [
 main();
 
 function main() {
+  backdown(configPath);
   backup(configPath);
 
   extractDatas(configPath);
@@ -34,16 +35,19 @@ function extractDatas(configPath) {
   makeNewConfig(configPath, 'DefaultInputFile', '"../mnist/mnist_encoded/encoded_train_ae.npy";');
   
   for(let i=1; i<=maxScale; ++i) {
+    const currDir = './results/'+'_theashold'+threashold+ '_scale'+i;
+    if(!fs.existsSync(currDir))
+      fs.mkdirSync(currDir);
+
     makeNewConfig(configPath, 'DATA_SCALE', i);
 
     makeTargets.forEach(target=>{
-      const logFile = './results/'+target+ '_theashold'+threashold+ '_scale'+i;
+      const logFile = currDir+'/'+target+ '_theashold'+threashold+ '_scale'+i;
+
       makeNewConfig(configPath, 'LogFileName', '"'+logFile+'";');
 
       spawnSync('make', ['clean'], {stdio: 'inherit'});
       spawnSync('make', [target], {stdio: 'inherit'});
-      if(fs.existsSync('./results/'+target+'.csv'))
-        spawnSync('mv', ['./results/'+target+'.csv', logFile+'.csv'], {stdio: 'inherit'});
     });
   }
 }
@@ -88,7 +92,8 @@ function backup(filePath) {
 
 function backdown(filePath) {
   const srcPath = getBackupPath(filePath);
-  fs.copyFileSync(srcPath, filePath);
+  if(fs.exsistsSync(srcPath))
+    fs.copyFileSync(srcPath, filePath);
 }
 
 function getBackupPath(filePath) {

@@ -40,7 +40,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     delete[] newCentroids;
 
 #ifdef SPARSE_LOG
-    log.Lap("KMeans-Sequential End");
+    log.Lap("KMeans-Sequential");
 #endif
 }
 

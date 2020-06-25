@@ -71,7 +71,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     cudaDeviceSynchronize();
     cudaAssert( cudaPeekAtLastError());
 #ifdef SPARSE_LOG
-    log.Lap("KMeans-Parallel-const End");
+    log.Lap("KMeans-Parallel-const");
 #endif
     announce.Labels(data);
     announce.InitCentroids(newCentroids);
