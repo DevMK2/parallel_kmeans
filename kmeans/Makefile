@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 CC = g++
 CU = nvcc
-CUFLAGS = -lineinfo --ptxas-options=-v -arch=sm_50 -rdc=true
+CUFLAGS = -lineinfo -arch=sm_50 -rdc=true
 CFLAGS = --std=c++14 -o
 INCLUDES = -Iinclude -I./sequential/include -I./parallel/include -I../lap/src
 LIBDIR = -Llib -L../lap/devel/lib

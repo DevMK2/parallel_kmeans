@@ -17,7 +17,4 @@ inline bool cmpDataPoint(const DataPoint& p1, const DataPoint& p2) {
     return p1.label < p2.label;
 }
 
-using Labels_T = Label_T*;
-using Trans_DataValues = Data_T*;
-
 #endif

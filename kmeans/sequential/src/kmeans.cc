@@ -36,6 +36,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
         deeplog.Lap("check centroids");
 #endif 
     }
+    announce.Centroids(centroids);
 
     delete[] newCentroids;
 

@@ -35,18 +35,18 @@ public:
         std::cout << std::endl;
     }
 
-    void LabelsTransposed(const Labels_T labels) {
-        static int tryCount = 0;
-        int labelSizes[KSize] = {0,}; 
+    void Centroids(const DataPoint* centroid) {
+        static int maxVisibleLength = 6;
+        std::cout << "centroids .. " << std::endl;
 
-        std::cout << "labeling result, number of datas foreach label .. (try:"<<++tryCount<< ")" << std::endl;
+        for(int kIdx=0; kIdx!=KSize; ++kIdx) {
+            std::cout << centroid[kIdx].label << ":[ " ;
 
-        for(int dataIdx=0; dataIdx!=DataSize; ++dataIdx)
-            labelSizes[labels[dataIdx]]++;
+            for(int featIdx=0; featIdx!=maxVisibleLength; ++featIdx)
+                printf("%-7.3f ", centroid[kIdx].value[featIdx]);
 
-        for(int kIdx=0; kIdx!=KSize; ++kIdx)
-            std::cout << kIdx << " : " << labelSizes[kIdx] << std::endl;
-
+            std::cout << "...]" << std::endl;
+        }
         std::cout << std::endl;
     }
 
