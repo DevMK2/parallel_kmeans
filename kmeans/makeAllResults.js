@@ -7,11 +7,7 @@ const configPath = "include/config.hh";
 const maxScale = 5;
 const makeTargets = [
   'kmeans_sequential'
-  ,'kmeans_sequential_sorting'
   ,'kmeans_parallel'
-  ,'kmeans_parallel_const'
-  ,'kmeans_parallel_sorting'
-  ,'kmeans_parallel_mempattern'
 ];
 
 main();

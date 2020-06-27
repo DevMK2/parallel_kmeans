@@ -1,200 +1,265 @@
 #include "kmeans_parallel.cuh"
+#include "cuda_constants.cuh"
+#include "cuda_assert.cuh"
 #include "announce.hh"
 #include "log.cc"
+
+static const int labelingThreads = 256;
+static const int updateCentroidThreads = 1024;
 
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 #ifdef SPARSE_LOG
     Log<> log ( 
-        LogFileName.empty()?  "./results/parallel" : LogFileName
+        LogFileName.empty()?  "./results/parallel_mempattern" : LogFileName
     );
 #endif
+    //\ memory access pattern을 개선하기 위해 row major하도록 datapoints를 전치함.
+    Label_T* dataLabels = new Label_T[DataSize];
+    Data_T* dataValuesTransposed = new Data_T[FeatSize * DataSize];
+    transposeDataPointers(data, dataLabels, dataValuesTransposed);
     cudaAssert (
-        cudaHostRegister(data, DataSize*sizeof(DataPoint), cudaHostRegisterPortable)
+        cudaHostRegister(dataLabels, DataSize*sizeof(Label_T), cudaHostRegisterPortable)
     );
+    cudaAssert (
+        cudaHostRegister(dataValuesTransposed, FeatSize*DataSize*sizeof(Data_T), cudaHostRegisterPortable)
+    );
+
+    //\ datapoints 재배치 위한 추가 data
+    Data_T* newDataValuesTransposed;
+    cudaAssert (
+        cudaMalloc((void**)&newDataValuesTransposed, FeatSize*DataSize*sizeof(Data_T))
+    );
+
+    //\ update된 centroid와 기존 centroid를 비교하기 위한 추가 data
+    auto newCentroids = new DataPoint[KSize];
     cudaAssert (
         cudaHostRegister(centroids, KSize*sizeof(DataPoint), cudaHostRegisterPortable)
     );
-
-    auto newCentroids = new DataPoint[KSize];
-    bool* isUpdated = new bool(true);
-
     cudaAssert (
         cudaHostRegister(newCentroids, KSize*sizeof(DataPoint), cudaHostRegisterPortable)
     );
-    cudaAssert (
-        cudaHostRegister(isUpdated, sizeof(bool), cudaHostRegisterPortable)
-    );
 
-    //study(deviceQuery());
-    int numThread_labeling = 4; /*TODO get from study*/
-    int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
+    auto labelCounts = new size_t[KSize]{0,};
+    auto begines = new size_t[KSize]{0,};
+    auto endes = new size_t[KSize]{0,};
+    auto dataIdxs = new int[DataSize]{0,};
+    cudaAssert (
+        cudaHostRegister(dataIdxs, DataSize*sizeof(int), cudaHostRegisterPortable)
+    );
 
 #ifdef DEEP_LOG
     Log<LoopEvaluate, 1024> deeplog (
-        LogFileName.empty()?  "./results/parallel_deep" : LogFileName+"_deep"
+        LogFileName.empty()?  "./results/parallel_mampattern_deep" : LogFileName+"_deep"
     );
 #endif
+    dim3 dimBlockLabeling(labelingThreads);// TODO calc from study
+    dim3 dimGridLabeling(ceil((float)DataSize / labelingThreads));
+
     while(threashold--) {
-        KMeans::labeling<<<numBlock_labeling, numThread_labeling>>>(centroids, data);
+        memcpyCentroidsToConst(centroids);
+        KMeans::labeling<<<dimGridLabeling, dimBlockLabeling>>>(dataLabels, dataValuesTransposed);
 #ifdef DEEP_LOG
-        cudaDeviceSynchronize();
-        announce.Labels(data);
         deeplog.Lap("labeling");
 #endif
 
-        resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
+        cudaDeviceSynchronize(); // labeling에서 갱신된 dataLabels로 label당 datapoint의 갯수를 세야 한다.
+        KMeans::calcLabelCounts(dataLabels, dataIdxs, labelCounts);
+        KMeans::setLabelBounds(labelCounts, begines, endes);
+        memcpyLabelCountToConst(begines, endes);
+        KMeans::sortDatapoints<<<dimGridLabeling, dimBlockLabeling>>> (
+            dataLabels, dataIdxs, dataValuesTransposed, newDataValuesTransposed
+        );
+        cudaMemcpy(dataValuesTransposed, newDataValuesTransposed, DataSize*FeatSize*sizeof(Data_T), cudaMemcpyDeviceToDevice);
+#ifdef DEEP_LOG
+        deeplog.Lap("sorting");
+#endif
 
-        KMeans::updateCentroidAccum<<<numBlock_labeling,numThread_labeling>>>(newCentroids, data);
+        KMeans::resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
+#ifdef DEEP_LOG
+        cudaDeviceSynchronize();
+        deeplog.Lap("reset NewCentroids");
+#endif
+
+        size_t maxLabelCount = 0;
+        for(int i=0; i!=KSize; ++i)
+            maxLabelCount = std::max(maxLabelCount, labelCounts[i]);
+        dim3 dimBlockUpdateCentroid(updateCentroidThreads, 1, 1);
+        dim3 dimGridUpdateCentroid(ceil((float)maxLabelCount/updateCentroidThreads), KSize, 1);
+        KMeans::updateCentroidAccum<<<dimGridUpdateCentroid, dimBlockUpdateCentroid>>> (
+            newCentroids, dataValuesTransposed
+        );
         KMeans::updateCentroidDivide<<<KSize, FeatSize>>>(newCentroids);
 #ifdef DEEP_LOG
         cudaDeviceSynchronize();
         deeplog.Lap("updateCentroid");
 #endif
 
-        KMeans::checkIsSame<<<KSize, FeatSize>>>(isUpdated, centroids, newCentroids);
-        cudaDeviceSynchronize();
-        if(*isUpdated)
+        if(isConvergence(centroids, newCentroids))
             break;
-        *isUpdated = false;
-
         memcpyCentroid<<<KSize,FeatSize>>>(centroids, newCentroids);
+        cudaDeviceSynchronize(); // 다음 루프에서 갱신된 centroids를 constant mem으로 올려야한다.
 #ifdef DEEP_LOG
-        cudaDeviceSynchronize();
         deeplog.Lap("check centroids");
 #endif
     }
+
     cudaDeviceSynchronize();
     cudaAssert( cudaPeekAtLastError());
 #ifdef SPARSE_LOG
-    log.Lap("KMeans-Parallel");
+    log.Lap("KMeans-Parallel-MemPattern");
 #endif
-    announce.Labels(data);
-    announce.InitCentroids(newCentroids);
+    announce.Centroids(newCentroids);
 
-    cudaAssert( cudaHostUnregister(data) );
+    cudaAssert( cudaHostUnregister(dataIdxs));
+    cudaAssert( cudaHostUnregister(dataLabels));
+    cudaAssert( cudaHostUnregister(dataValuesTransposed));
     cudaAssert( cudaHostUnregister(centroids) );
     cudaAssert( cudaHostUnregister(newCentroids) );
-    cudaAssert( cudaHostUnregister(isUpdated) );
+    cudaAssert( cudaFree(newDataValuesTransposed));
 
+    delete[] dataIdxs;
+    delete[] dataLabels;
+    delete[] dataValuesTransposed;
+    delete[] labelCounts;
+    delete[] begines;
+    delete[] endes;
     delete[] newCentroids;
-    delete isUpdated;
 }
 
-/// labeling ////////////////////////////////////////////////////////////////////////////////////
+//// Labeling //////////////////////////////////////////////////////////////////////////////////////
 __global__
-void KMeans::labeling(const DataPoint* const centroids, DataPoint* const data) {
-    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if(idx >= DataSize)
-        return;
-
-    const DataPoint* centroidPtr = centroids;
-    DataPoint threadData = data[idx];
-
-    Label_T minDistLabel = 0;
-    Data_T minDistSQR = MaxDataValue;
-
-    for(int i=0; i!=KSize; ++i) {
-        Data_T currDistSQR = Labeling::euclideanDistSQR(threadData.value, centroidPtr->value);
-        if(minDistSQR > currDistSQR) {
-            minDistLabel = i;
-            minDistSQR = currDistSQR;
-        }
-
-        centroidPtr++;
-    }
-
-    data[idx].label = minDistLabel;
-}
-
-__device__
-Data_T KMeans::Labeling::euclideanDistSQR (const Data_T* const lhs, const Data_T* const rhs) {
-    const Data_T* valuePtrLHS = lhs;
-    const Data_T* valuePtrRHS = rhs;
-
-    Data_T distSQR = 0;
-
-    for(int featIdx=0; featIdx!=FeatSize; ++featIdx) {
-        Data_T dist = *valuePtrLHS - *valuePtrRHS;
-
-        distSQR += dist*dist;
-
-        valuePtrLHS++;
-        valuePtrRHS++;
-    }
-
-    return distSQR;
-}
-
-/// update centroids //////////////////////////////////////////////////////////////////////////////
-__global__
-void KMeans::updateCentroidAccum(DataPoint* const centroids, const DataPoint* const data) {
+void KMeans::labeling(Label_T* const labels, Data_T* const data) {
     const int dataIdx = blockIdx.x * blockDim.x + threadIdx.x;
     if(dataIdx >= DataSize)
         return;
 
-    const int centroidIdx = data[dataIdx].label;
+    Data_T distSQRSums[KSize]{0,};
+    calcAndSetDistSQRSums(dataIdx, data, distSQRSums);
 
-    atomicAdd(&(centroids[centroidIdx].label), 1); // newCentroids는 labelSize를 나타내기 위해 0으로 초기화됨
-    Update::addValuesLtoR(data[dataIdx].value, centroids[centroidIdx].value);
+    labels[dataIdx] = getMinDistLabel(distSQRSums);
+}
+
+__device__
+void KMeans::calcAndSetDistSQRSums(const int& dataIdx, Data_T* const data, Data_T* const distSQRSums) {
+    for(int i=0; i!=FeatSize; ++i) {
+        int featIdx = i * DataSize;
+        Data_T currValue = data[dataIdx + featIdx];
+
+        for(int j=0; j!=KSize; ++j) {
+            Data_T centroidValue = constCentroidValues[j*FeatSize + i];
+            Data_T currDist = currValue - centroidValue;
+            distSQRSums[j] += currDist * currDist;
+        }
+        __syncthreads();
+    }
+}
+
+__device__
+Label_T KMeans::getMinDistLabel(const Data_T* const distSQRSums) {
+    const Data_T* distSQRSumPtr = distSQRSums;
+
+    Data_T minDistSQRSum = MaxDataValue;
+    Label_T minDistLabel = 0;
+
+    for(int i=0; i!=KSize; ++i) {
+        if(minDistSQRSum > *distSQRSumPtr) {
+            minDistSQRSum = *distSQRSumPtr;
+            minDistLabel = i;
+        }
+        distSQRSumPtr++;
+    }
+
+    return minDistLabel;
+}
+
+/// realign datapoints ///////////////////////////////////////////////////////////////////////////
+void KMeans::calcLabelCounts (
+    const Label_T* const dataLabels,
+    Label_T* const dataIdxs,
+    size_t* const labelCounts
+) {
+    memset(labelCounts, 0, KSize*sizeof(size_t));
+
+    for(int i=0; i!=DataSize; ++i) {
+        Label_T curr = dataLabels[i];
+        dataIdxs[i] = labelCounts[curr]; // 라벨 중에 몇 번째인지 index
+        labelCounts[curr] += 1; // 라벨 당 datapoint 갯수
+    }
+}
+
+void KMeans::setLabelBounds (
+    const size_t* const labelCounts,
+    size_t* const begines,
+    size_t* const endes
+) {
+    begines[0] = 0;
+    endes[0] = labelCounts[0] - 1;
+
+    for(int i=1; i!=KSize; ++i) {
+        begines[i] = endes[i-1] + 1;
+        endes[i] = begines[i] + labelCounts[i] - 1;
+    }
+}
+
+__global__
+void KMeans::sortDatapoints (
+    const Label_T* const dataLabels,
+    const Label_T* const dataIdxs,
+    const Data_T* const dataValuesTransposed,
+    Data_T* const newDataValuesTransposed
+) {
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx >= DataSize)
+        return;
+
+    int targetIdx = constLabelFirstIdxes[dataLabels[idx]] + dataIdxs[idx];
+
+    for(int j=0; j!=FeatSize; ++j) {
+        int row = j*DataSize;
+        newDataValuesTransposed[row+targetIdx] = dataValuesTransposed[row+idx];
+    }
+}
+
+/// update centroids //////////////////////////////////////////////////////////////////////////////
+__global__
+void KMeans::updateCentroidAccum(DataPoint* const centroids, const Data_T* data) {
+    __shared__ Data_T Sum[updateCentroidThreads];
+
+    const int tID = threadIdx.x;
+    const Label_T label = blockIdx.y;
+
+    const size_t begin = constLabelFirstIdxes[label];
+    const size_t end = constLabelLastIdxes[label];
+    const size_t dataIdx = begin + (blockIdx.x * blockDim.x + tID);
+
+    if(dataIdx > end)
+        return;
+
+    {//\Asserts
+    assert(label >= 0 && label < KSize);
+    assert(end < DataSize);
+    assert(dataIdx >= begin);
+    }
+
+    for(int featIdx=0; featIdx!=FeatSize; ++featIdx) {
+        Sum[tID] = data[featIdx*DataSize + dataIdx];
+
+        for(int stride=blockDim.x/2; stride>=1; stride>>=1) {
+            __syncthreads();
+            if(tID < stride && dataIdx+stride <= end)
+                Sum[tID] += Sum[tID+stride];
+        }
+
+        if(tID != 0)
+            continue;
+
+        atomicAdd(&(centroids[label].value[featIdx]), Sum[tID]);
+    }
 }
 
 __global__
 void KMeans::updateCentroidDivide(DataPoint* const centroids) {
-    centroids[blockIdx.x].value[threadIdx.x] /= centroids[blockIdx.x].label;
-}
-
-__device__
-void KMeans::Update::addValuesLtoR(const Data_T* const lhs, Data_T* const rhs) {
-    const Data_T* lhsPtr = lhs;
-    Data_T* rhsPtr = rhs;
-
-    for(int featIdx=0; featIdx!=FeatSize; ++featIdx)
-        atomicAdd(rhsPtr++, *(lhsPtr++));
-}
-
-void study(const std::vector<DeviceQuery>& devices) {
-    /*
-     * According to the CUDA C Best Practice Guide.
-     * 1. Thread per block should be a multiple of 32(warp size)
-     * 2. A minimum of 64 threads per block should be used.
-     * 3. Between 128 and 256 thread per block is a better choice
-     * 4. Use several(3 to 4) small thread blocks rather than one large thread block
-     */
-    /* 
-     * sizeof DataPoint 
-     *   = 4(float) * 200(feature size) + 4(label, int) 
-     *   = 804 byte
-     *   =>register memory per thread
-     *     = 832 byte { 804 + 8(pointer) + 8(two int) + 8(size_t) + 4(Data_T) }
-     *   =>register count per thread
-     *     = 832/4 = 208
-     *
-     * sizeof Centroid
-     *   = DataPoint x 10
-     *   = 8040 byte
-     * 
-     * memory per block (* NOT SHARED MEMORY *)
-     *   = 804 * 64 
-     *   = 51456 byte
-     *
-     * total global memory size = 8112 MBytes
-     * number of registers per block = 65536
-     */
-    Count_T numRegisterPerKernel_labeling = 208;
-    MemSize_L sizeDataPoint = sizeof(DataPoint);
-    MemSize_L sizeCentroids = sizeDataPoint * KSize;
-    for(auto device : devices) {
-        assert(sizeCentroids < device.totalConstMem);
-
-        std::cout <<  "Device["<<device.index<<"]" << std::endl;
-
-        Count_T maxThreadsPerBlock = device.numRegPerBlock / numRegisterPerKernel_labeling;
-        std::cout <<"max threads per block(labeling) : " << maxThreadsPerBlock << std::endl;
-        std::cout <<"max threads per block(update)   : " << maxThreadsPerBlock << std::endl;
-        std::cout <<"max threads per block(check)    : " << maxThreadsPerBlock << std::endl;
-
-        std::cout << device.numRegPerBlock / 208.0 << std::endl;
-        std::cout << device.threadsPerBlock << std::endl;
-        std::cout << device.threadsPerMultiprocesser << std::endl;
-    }
+    int label = blockIdx.x;
+    int labelCount = constLabelLastIdxes[label] - constLabelFirstIdxes[label] + 1;
+    centroids[label].value[threadIdx.x] /= labelCount;
 }

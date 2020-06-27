@@ -4,7 +4,6 @@
 #include <cuda.h>
 #include "datatype.hh"
 #include "data_transpose.cuh"
-#include "cuda_assert.cuh"
 #include "cuda_device.cuh"
 
 namespace KMeans {
@@ -24,7 +23,7 @@ namespace Labeling {
 __device__ Data_T euclideanDistSQR(const Data_T* const __restrict__ lhs, const Data_T* const __restrict__ rhs);
 };
 
-__global__ void labeling(Labels_T const labels, Trans_DataValues const data);
+__global__ void labeling(Label_T* const labels, Data_T* const data);
 
 __global__ void updateCentroidAccum(DataPoint* const centroids, const DataPoint* const data);
 __global__ void updateCentroidDivide(DataPoint* const centroids);
@@ -33,21 +32,21 @@ __device__ void addValuesLtoR(const Data_T* const lhs, Data_T* const rhs);
 };
 
 ///\ Transpose
-__global__ void labeling(Trans_DataValues const data);
-__device__ void calcAndSetDistSQRSums(const int& dataIDX, Trans_DataValues const data, Data_T* const distSQRSums);
+__global__ void labeling(Data_T* const data);
+__device__ void calcAndSetDistSQRSums(const int& dataIDX, Data_T* const data, Data_T* const distSQRSums);
 __device__ Label_T getMinDistLabel(const Data_T* const distSQRSums);
 
-void calcLabelCounts(Labels_T const dataLabels, Label_T* const dataIDXs, size_t* const labelCounts);
+void calcLabelCounts(const Label_T* const dataLabels, Label_T* const dataIDXs, size_t* const labelCounts);
 void setLabelBounds(const size_t* const labelCounts, size_t* const labelFirstIdxes, size_t* const labelLastIdxes);
 __global__
 void sortDatapoints (
-    Labels_T const dataLabels,
+    const Label_T* const dataLabels,
     const Label_T* const dataIDXs,
-    Trans_DataValues const dataValuesTransposed,
-    Trans_DataValues const newDataValuesTransposed
+    const Data_T* const dataValuesTransposed,
+    Data_T* const newDataValuesTransposed
 );
 
-__global__ void updateCentroidAccum(DataPoint* const centroids, const Trans_DataValues data);
+__global__ void updateCentroidAccum(DataPoint* const centroids, const Data_T* data);
 
 
 static void initCentroids(DataPoint* const centroids, const DataPoint* const data) {

@@ -5,11 +5,7 @@ const { spawnSync } = require('child_process');
 
 const watchExecutes = [
   'kmeans', 
-  'kmeans_sorting', 
-  'kmeans_parallel',
-  'kmeans_parallel_const', 
-  'kmeans_parallel_sorting', 
-  'kmeans_parallel_mempattern',
+  'kmeans_parallel'
 ];
 
 Array.prototype.pjoin = function() { return this.join('/'); }
