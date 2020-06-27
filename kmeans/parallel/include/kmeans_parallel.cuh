@@ -9,45 +9,25 @@
 namespace KMeans {
 void main(DataPoint* const centroids, DataPoint* const data);
 
-///\ No Const, No Sorting
-__global__ void labeling(const DataPoint* const centroids, DataPoint* const data);
-
-//TODO deprecated
-namespace Labeling {
-__device__ Data_T euclideanDistSQR(const Data_T* const lhs, const Data_T* const rhs);
-};
-
-///\ Const, No Sorting
-__global__ void labeling(DataPoint* const data);
-namespace Labeling {
-__device__ Data_T euclideanDistSQR(const Data_T* const __restrict__ lhs, const Data_T* const __restrict__ rhs);
-};
-
 __global__ void labeling(Label_T* const labels, Data_T* const data);
-
-__global__ void updateCentroidAccum(DataPoint* const centroids, const DataPoint* const data);
-__global__ void updateCentroidDivide(DataPoint* const centroids);
-namespace Update {
-__device__ void addValuesLtoR(const Data_T* const lhs, Data_T* const rhs);
-};
-
-///\ Transpose
-__global__ void labeling(Data_T* const data);
 __device__ void calcAndSetDistSQRSums(const int& dataIDX, Data_T* const data, Data_T* const distSQRSums);
 __device__ Label_T getMinDistLabel(const Data_T* const distSQRSums);
 
 void calcLabelCounts(const Label_T* const dataLabels, Label_T* const dataIDXs, size_t* const labelCounts);
 void setLabelBounds(const size_t* const labelCounts, size_t* const labelFirstIdxes, size_t* const labelLastIdxes);
-__global__
-void sortDatapoints (
-    const Label_T* const dataLabels,
-    const Label_T* const dataIDXs,
-    const Data_T* const dataValuesTransposed,
-    Data_T* const newDataValuesTransposed
-);
+__global__ void sortDatapoints (const Label_T* const, const Label_T* const, const Data_T* const, Data_T* const);
 
 __global__ void updateCentroidAccum(DataPoint* const centroids, const Data_T* data);
+__global__ void updateCentroidDivide(DataPoint* const centroids);
 
+__global__ static void resetNewCentroids(DataPoint* newCentroids) {
+    newCentroids[blockIdx.x].label = 0;
+    newCentroids[blockIdx.x].value[threadIdx.x]= 0;
+}
+
+__global__ static void memcpyCentroid(DataPoint* const centroids, DataPoint* const newCentroids) {
+    centroids[blockIdx.x].value[threadIdx.x]= newCentroids[blockIdx.x].value[threadIdx.x];
+}
 
 static void initCentroids(DataPoint* const centroids, const DataPoint* const data) {
     for(int kIdx=0; kIdx!=KSize; ++kIdx) {
@@ -57,11 +37,6 @@ static void initCentroids(DataPoint* const centroids, const DataPoint* const dat
             centroids[kIdx].value[featIdx] = data[kIdx].value[featIdx];
         }
     }
-}
-
-__global__ static void resetNewCentroids(DataPoint* newCentroids) {
-    newCentroids[blockIdx.x].label = 0;
-    newCentroids[blockIdx.x].value[threadIdx.x]= 0;
 }
 
 static bool isConvergence(DataPoint* const centroids, DataPoint* const newCentroids) {
@@ -80,11 +55,6 @@ static bool isConvergence(DataPoint* const centroids, DataPoint* const newCentro
     }
     return true;
 }
-
-__global__ static void memcpyCentroid(DataPoint* const centroids, DataPoint* const newCentroids) {
-    centroids[blockIdx.x].value[threadIdx.x]= newCentroids[blockIdx.x].value[threadIdx.x];
-}
-
 };
 
 #endif
