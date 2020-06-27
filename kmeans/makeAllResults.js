@@ -4,7 +4,7 @@ const {spawnSync} = require('child_process');
 Array.prototype.last = function() { return this[this.length-1]; }
 
 const configPath = "include/config.hh";
-const maxScale = 5;
+const maxScale = 10;
 const makeTargets = [
   'kmeans_sequential'
   ,'kmeans_parallel'
@@ -22,7 +22,7 @@ function main() {
 }
 
 function extractDatas(configPath) {
-  const threashold = 5
+  const threashold = 40
 
   addNewConfig(configPath, "#define", "SPARSE_LOG");
   addNewConfig(configPath, "#define", "DEEP_LOG");
@@ -88,7 +88,7 @@ function backup(filePath) {
 
 function backdown(filePath) {
   const srcPath = getBackupPath(filePath);
-  if(fs.exsistsSync(srcPath))
+  if(fs.existsSync(srcPath))
     fs.copyFileSync(srcPath, filePath);
 }
 

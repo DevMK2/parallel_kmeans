@@ -29,8 +29,8 @@ kmeans_sequential: main.o kmeans.o
 
 kmeans_parallel: main.o kmeans_parallel.o
 	cp main.cc main.cu &&\
-	$(CU) $(CUFLAGS) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL &&\
-		nvprof ./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
+	$(CU) $(CUFLAGS) $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL &&\
+		./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
 		rm -rf main.cu
 
 npy_test: npy_test.o
