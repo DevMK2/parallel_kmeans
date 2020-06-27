@@ -149,6 +149,7 @@ void KMeans::calcAndSetDistSQRSums(const int& dataIdx, Trans_DataValues const da
         for(int j=0; j!=KSize; ++j) {
             Data_T currDist = currValue - constCentroidValues[j*FeatSize + i];
             distSQRSums[j] += currDist * currDist;
+            __syncthreads(); // TODO memory access 패턴을 위해 동기화. 이것도 streaming으로 필 수 있을 듯
         }
         __syncthreads(); // TODO memory access 패턴을 위해 동기화. 이것도 streaming으로 필 수 있을 듯
     }

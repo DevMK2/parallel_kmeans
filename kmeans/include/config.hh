@@ -4,14 +4,14 @@
 #include "npy.hh" // npy size_t
 #include <string>
 
-#define DEEP_LOG
-#define SPARSE_LOG
+//#define DEEP_LOG
+//#define SPARSE_LOG
 
 #define ORIGIN_K_SIZE 10
 #define ORIGIN_DATA_SIZE 60000
 #define ORIGIN_FEAT_SIZE 200
 
-#define DATA_SCALE 1
+#define DATA_SCALE 5
 #define THREASHOLD 50
 
 static const size_t KSize = ORIGIN_K_SIZE;
