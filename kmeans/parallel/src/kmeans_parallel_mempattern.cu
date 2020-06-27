@@ -18,7 +18,9 @@ __device__ __constant__ size_t constLabelLastIdxes[KSize];
 
 #define Trans_DataValues_IDX(x,y) y*DataSize+x
 #define CentroidValues_IDX(x,y) y*FeatSize+x
+__global__
 void transposeDataPointers(const DataPoint* const data, Labels_T labels, Trans_DataValues transposed);
+__global__
 void untransposeDataPointers(const Trans_DataValues transposed, Labels_T labels, DataPoint* const data);
 
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
@@ -31,8 +33,9 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     Labels_T dataLabels = new Label_T[DataSize];
     Trans_DataValues dataValuesTransposed = new Data_T[FeatSize * DataSize];
 
-    transposeDataPointers(data, dataLabels, dataValuesTransposed);
-
+    cudaAssert (
+        cudaHostRegister(data, DataSize*sizeof(DataPoint), cudaHostRegisterPortable)
+    );
     cudaAssert (
         cudaHostRegister(dataLabels, DataSize*sizeof(Label_T), cudaHostRegisterPortable)
     );
@@ -42,6 +45,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     cudaAssert (
         cudaHostRegister(centroids, KSize*sizeof(DataPoint), cudaHostRegisterPortable)
     );
+    transposeDataPointers<<<DataSize, FeatSize>>>(data, dataLabels, dataValuesTransposed);
 
     auto labelCounts = new size_t[KSize]{0,};
     auto labelFirstIdxes = new size_t[KSize]{0,};
@@ -56,7 +60,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
         cudaHostRegister(isUpdated, sizeof(bool), cudaHostRegisterPortable)
     );
 
-    int numThread_labeling = 256; /*TODO get from study*/
+    int numThread_labeling = 256; /*TODO calc from study*/
     int numBlock_labeling = ceil((float)DataSize / numThread_labeling);
 
 #ifdef DEEP_LOG
@@ -73,11 +77,11 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
 #ifdef DEEP_LOG
         deeplog.Lap("labeling");
 #endif
-        announce.Labels(data);
-
-        untransposeDataPointers(dataValuesTransposed, dataLabels, data);
+        untransposeDataPointers<<<DataSize, FeatSize>>>(dataValuesTransposed, dataLabels, data);
+        cudaDeviceSynchronize();
         sortAndGetLabelCounts(data, labelCounts, labelFirstIdxes, labelLastIdxes);
-        transposeDataPointers(data, dataLabels, dataValuesTransposed);
+        transposeDataPointers<<<DataSize, FeatSize>>>(data, dataLabels, dataValuesTransposed);
+        announce.Labels(data);
 
         memcpyLabelCountToConst(labelCounts, labelFirstIdxes, labelLastIdxes);
         size_t maxLabelCount = 0;
@@ -90,7 +94,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
         resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
 
         dim3 dimBlock(UpdateCentroidBlockDim, 1, 1);
-        dim3 dimGrid(ceil(maxLabelCount/UpdateCentroidBlockDim), KSize, 1);
+        dim3 dimGrid(ceil((float)maxLabelCount/UpdateCentroidBlockDim), KSize, 1);
         KMeans::updateCentroidAccum<<<dimGrid, dimBlock>>>(newCentroids, dataValuesTransposed);
         KMeans::updateCentroidDivide<<<KSize, FeatSize>>>(newCentroids);
 #ifdef DEEP_LOG
@@ -118,6 +122,7 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     announce.Labels(data);
     announce.InitCentroids(newCentroids);
 
+    cudaAssert( cudaHostUnregister(data));
     cudaAssert( cudaHostUnregister(dataLabels));
     cudaAssert( cudaHostUnregister(dataValuesTransposed));
     cudaAssert( cudaHostUnregister(centroids) );
@@ -148,7 +153,7 @@ void KMeans::labeling(Labels_T const labels, Trans_DataValues const data) {
             Data_T currDist = currValue - constCentroidValues[j*FeatSize + i];
             distSQRSums[j] += currDist * currDist;
         }
-	__syncthreads();
+        __syncthreads();
     }
 
     Data_T minDistSQRSum = MaxDataValue;
@@ -295,22 +300,24 @@ void memcpyLabelCountFromConst(size_t* labelCount, size_t* labelFirstIdxes, size
     );
 }
 
+__global__
 void transposeDataPointers(const DataPoint* const data, Labels_T labels, Trans_DataValues transposed) {
-    for(int i=0; i!=DataSize; ++i) {
-        labels[i] = data[i].label;
+    int dataIdx = blockIdx.x;
+    int valueIdx = threadIdx.x;
 
-        for(int j=0; j!=FeatSize; ++j) {
-            transposed[j*DataSize + i] = data[i].value[j];
-        }
-    }
+    if(valueIdx==0)
+        labels[dataIdx] = data[dataIdx].label;
+
+    transposed[valueIdx*DataSize + dataIdx] = data[dataIdx].value[valueIdx];
 }
 
+__global__
 void untransposeDataPointers(const Trans_DataValues transposed, Labels_T labels, DataPoint* const data) {
-    for(int i=0; i!=DataSize; ++i) {
-        data[i].label = labels[i];
+    int dataIdx = blockIdx.x;
+    int valueIdx = threadIdx.x;
 
-        for(int j=0; j!=FeatSize; ++j) {
-            data[i].value[j] = transposed[j*DataSize + i];
-        }
-    }
+    if(valueIdx==0)
+        data[dataIdx].label = labels[dataIdx];
+
+    data[dataIdx].value[valueIdx] = transposed[valueIdx*DataSize + dataIdx];
 }
