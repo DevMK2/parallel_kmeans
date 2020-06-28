@@ -27,7 +27,8 @@ int main(int argc, const char *argv[]) {
     }
 
     KMeans::initCentroids(centroids, data);
-    announce.InitCentroids(centroids);
+    announce.Centroids(centroids);
+
     KMeans::main(centroids, data);
 
     delete[] data;

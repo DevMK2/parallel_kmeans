@@ -2,17 +2,11 @@
 #include "cuda_constants.cuh"
 #include "cuda_assert.cuh"
 #include "announce.hh"
-#include "log.cc"
 
 static const int labelingThreads = 256;
 static const int updateCentroidThreads = 1024;
 
 void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
-#ifdef SPARSE_LOG
-    Log<> log ( 
-        LogFileName.empty()?  "./results/parallel_mempattern" : LogFileName
-    );
-#endif
     //\ memory access pattern을 개선하기 위해 row major하도록 datapoints를 전치함.
     Label_T* dataLabels = new Label_T[DataSize];
     Data_T* dataValuesTransposed = new Data_T[FeatSize * DataSize];
@@ -25,7 +19,14 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
     );
 
     //\ datapoints 재배치 위한 추가 data
+    auto labelCounts = new size_t[KSize]{0,};
+    auto begines = new size_t[KSize]{0,};
+    auto endes = new size_t[KSize]{0,};
+    auto dataIdxs = new int[DataSize]{0,};
     Data_T* newDataValuesTransposed;
+    cudaAssert (
+        cudaHostRegister(dataIdxs, DataSize*sizeof(int), cudaHostRegisterPortable)
+    );
     cudaAssert (
         cudaMalloc((void**)&newDataValuesTransposed, FeatSize*DataSize*sizeof(Data_T))
     );
@@ -39,47 +40,30 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
         cudaHostRegister(newCentroids, KSize*sizeof(DataPoint), cudaHostRegisterPortable)
     );
 
-    auto labelCounts = new size_t[KSize]{0,};
-    auto begines = new size_t[KSize]{0,};
-    auto endes = new size_t[KSize]{0,};
-    auto dataIdxs = new int[DataSize]{0,};
-    cudaAssert (
-        cudaHostRegister(dataIdxs, DataSize*sizeof(int), cudaHostRegisterPortable)
-    );
-
-#ifdef DEEP_LOG
-    Log<LoopEvaluate, 1024> deeplog (
-        LogFileName.empty()?  "./results/parallel_mampattern_deep" : LogFileName+"_deep"
-    );
-#endif
-    dim3 dimBlockLabeling(labelingThreads);// TODO calc from study
+    dim3 dimBlockLabeling(labelingThreads);
     dim3 dimGridLabeling(ceil((float)DataSize / labelingThreads));
 
     while(threashold--) {
+        announce.Loop("KMeans Parallel");
+
+        //\ Labeling
         memcpyCentroidsToConst(centroids);
         KMeans::labeling<<<dimGridLabeling, dimBlockLabeling>>>(dataLabels, dataValuesTransposed);
-#ifdef DEEP_LOG
-        deeplog.Lap("labeling");
-#endif
 
+        //\ Realignment 
         cudaDeviceSynchronize(); // labeling에서 갱신된 dataLabels로 label당 datapoint의 갯수를 세야 한다.
         KMeans::calcLabelCounts(dataLabels, dataIdxs, labelCounts);
         KMeans::setLabelBounds(labelCounts, begines, endes);
         memcpyLabelCountToConst(begines, endes);
+
         KMeans::sortDatapoints<<<dimGridLabeling, dimBlockLabeling>>> (
             dataLabels, dataIdxs, dataValuesTransposed, newDataValuesTransposed
         );
         cudaMemcpy(dataValuesTransposed, newDataValuesTransposed, DataSize*FeatSize*sizeof(Data_T), cudaMemcpyDeviceToDevice);
-#ifdef DEEP_LOG
-        deeplog.Lap("sorting");
-#endif
 
         KMeans::resetNewCentroids<<<KSize,FeatSize>>>(newCentroids);
-#ifdef DEEP_LOG
-        cudaDeviceSynchronize();
-        deeplog.Lap("reset NewCentroids");
-#endif
 
+        //\ UpdateCentroids
         size_t maxLabelCount = 0;
         for(int i=0; i!=KSize; ++i)
             maxLabelCount = std::max(maxLabelCount, labelCounts[i]);
@@ -89,25 +73,16 @@ void KMeans::main(DataPoint* const centroids, DataPoint* const data) {
             newCentroids, dataValuesTransposed
         );
         KMeans::updateCentroidDivide<<<KSize, FeatSize>>>(newCentroids);
-#ifdef DEEP_LOG
-        cudaDeviceSynchronize();
-        deeplog.Lap("updateCentroid");
-#endif
 
+        //\ Check is convergnece
         if(isConvergence(centroids, newCentroids))
             break;
         memcpyCentroid<<<KSize,FeatSize>>>(centroids, newCentroids);
         cudaDeviceSynchronize(); // 다음 루프에서 갱신된 centroids를 constant mem으로 올려야한다.
-#ifdef DEEP_LOG
-        deeplog.Lap("check centroids");
-#endif
     }
 
     cudaDeviceSynchronize();
     cudaAssert( cudaPeekAtLastError());
-#ifdef SPARSE_LOG
-    log.Lap("KMeans-Parallel-MemPattern");
-#endif
     announce.Centroids(newCentroids);
 
     cudaAssert( cudaHostUnregister(dataIdxs));

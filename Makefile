@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-SUB_DIRS = lap mnist kmeans 
+SUB_DIRS = mnist kmeans 
 
 default_target: subdirs 
 

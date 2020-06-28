@@ -20,21 +20,6 @@ public:
         printf("K: %ld, Features: %ld, Datas: %ld\n\n", KSize, FeatSize, DataSize);
     }
 
-    void InitCentroids(const DataPoint* centroid) {
-        static int maxVisibleLength = 6;
-        std::cout << "initialized centroids .. " << std::endl;
-
-        for(int kIdx=0; kIdx!=KSize; ++kIdx) {
-            std::cout << centroid[kIdx].label << ":[ " ;
-
-            for(int featIdx=0; featIdx!=maxVisibleLength; ++featIdx)
-                printf("%-7.3f ", centroid[kIdx].value[featIdx]);
-
-            std::cout << "...]" << std::endl;
-        }
-        std::cout << std::endl;
-    }
-
     void Centroids(const DataPoint* centroid) {
         static int maxVisibleLength = 6;
         std::cout << "centroids .. " << std::endl;
@@ -48,6 +33,11 @@ public:
             std::cout << "...]" << std::endl;
         }
         std::cout << std::endl;
+    }
+
+    void Loop(const std::string& prefix) {
+        static int tryCount = 0;
+        std::cout << prefix << " running .. (try:"<<++tryCount<< ")" << std::endl;
     }
 
     void Labels(const DataPoint* data) {

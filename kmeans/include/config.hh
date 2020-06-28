@@ -1,18 +1,15 @@
 #ifndef __CONFIG_HH__
 #define __CONFIG_HH__
 
+#define DATA_SCALE 1
+#define THREASHOLD 50 // FIXME
+
 #include "npy.hh" // npy size_t
 #include <string>
-
-//#define DEEP_LOG
-//#define SPARSE_LOG
 
 #define ORIGIN_K_SIZE 10
 #define ORIGIN_DATA_SIZE 60000
 #define ORIGIN_FEAT_SIZE 200
-
-#define DATA_SCALE 1
-#define THREASHOLD 2
 
 static const size_t KSize = ORIGIN_K_SIZE;
 static const size_t DataSize = ORIGIN_DATA_SIZE * DATA_SCALE;

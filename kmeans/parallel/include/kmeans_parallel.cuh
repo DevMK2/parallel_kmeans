@@ -9,14 +9,17 @@
 namespace KMeans {
 void main(DataPoint* const centroids, DataPoint* const data);
 
+//\ Labeling
 __global__ void labeling(Label_T* const labels, Data_T* const data);
 __device__ void calcAndSetDistSQRSums(const int& dataIDX, Data_T* const data, Data_T* const distSQRSums);
 __device__ Label_T getMinDistLabel(const Data_T* const distSQRSums);
 
+//\ Realignment
 void calcLabelCounts(const Label_T* const dataLabels, Label_T* const dataIDXs, size_t* const labelCounts);
 void setLabelBounds(const size_t* const labelCounts, size_t* const labelFirstIdxes, size_t* const labelLastIdxes);
 __global__ void sortDatapoints (const Label_T* const, const Label_T* const, const Data_T* const, Data_T* const);
 
+//\ UpdateCentroids
 __global__ void updateCentroidAccum(DataPoint* const centroids, const Data_T* data);
 __global__ void updateCentroidDivide(DataPoint* const centroids);
 

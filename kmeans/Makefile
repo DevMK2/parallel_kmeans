@@ -2,16 +2,16 @@ SHELL = /bin/bash
 
 CC = g++
 CU = nvcc
-CUFLAGS =#-lineinfo -arch=sm_50 -rdc=true
+CUFLAGS =#-lineinfo -arch=sm_50 -rdc=true ## for debug and profiling
 CFLAGS = --std=c++14 -o
-INCLUDES = -Iinclude -I./sequential/include -I./parallel/include -I../lap/src
-LIBDIR = -Llib -L../lap/devel/lib
-LIBS= -lcnpy -lz -llog
+INCLUDES = -Iinclude -I./sequential/include -I./parallel/include
+LIBDIR = -Llib
+LIBS= -lcnpy -lz
 CULIBS= -lcudart -lcudadevrt
 
 .SUFFIXES: .cc .cu .o
-vpath %.cc sequential/src tests
-vpath %.cu parallel/src tests
+vpath %.cc sequential/src
+vpath %.cu parallel/src
 
 .cc.o: 
 	$(CC) -c $(CFLAGS) $@ $< $(INCLUDES)
@@ -19,9 +19,8 @@ vpath %.cu parallel/src tests
 .cu.o: 
 	$(CU) $(CUFLAGS) -c $(CFLAGS) $@ $< $(INCLUDES)
 
-default_target: kmeans_sequential
-#all: kmeans_sequential kmeans_parallel
-npy_test_clean: npy_test clean
+default_target: all
+all: kmeans_sequential kmeans_parallel
 
 kmeans_sequential: main.o kmeans.o
 	$(CC) -g $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) &&\
@@ -32,13 +31,6 @@ kmeans_parallel: main.o kmeans_parallel.o
 	$(CU) $(CUFLAGS) $(CFLAGS) $@ $? $(LIBDIR) $(LIBS) $(CULIBS) -DPARALLEL &&\
 		./$@ ../mnist/mnist_encoded/encoded_train_ae.npy &&\
 		rm -rf main.cu
-
-npy_test: npy_test.o
-	python3 tests/make_mnist_seq.py &&\
-	mkdir -p temp &&\
-		$(CC) $(CFLAGS) temp/$@ $< $(LIBDIR) $(LIBS) &&\
-		cd temp && ./$@ &&\
-		cd .. && rm -rf temp
 
 clean:
 	rm -rf *.o &&\
