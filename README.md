@@ -5,14 +5,15 @@
 
 # 1. Project description
 - 이 프로젝트는 k-means 알고리즘을 병렬화하여 성능을 개선하는 알고리즘을 제안합니다.
+
+![results](./imgs/1.png)
+
 - CUDA GPU를 이용하여 성능을 개선했으며, 핵심 아이디어는 다음과 같습니다.
 ```
 1. Datapoint와 centroid 간의 거리 연산을 병렬화
 2. Memory access pattern 개선 위한 전처리과정
 3. centroids update 위한 datapoints 재배치 후 vector addition 알고리즘 적용 및 재배치 알고리즘 제안
 ```
-- 결과
-![results](./imgs/1.png)
 
 - [더 자세한 설명](./details/README.md)
 
