@@ -3,6 +3,7 @@
 - python3-venv
 - python3-pip
 - cuda toolkit >= 10.1
+- gnu c++ compiler >= c++14
 
 # Build
 ## ***주의하세요*** encoded_data가 이미 있다면 되도록 kmeans 디렉토리에서 make 하세요.
